@@ -1,0 +1,45 @@
+---
+title: "Note"
+author: "Riccardo Ferrarese"
+date: "19/3/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Text mining and Network Analysis of 
+## Setup App
+
+- installare [*git*](http://try.github.io/), sistema per il controllo del versionamento 
+- installare [*renv*](https://blog.rstudio.com/2019/11/06/renv-project-environments-for-r/), permette di creare un ambiente di esecuzione isolato per la gestione delle dipendenze. Permette anche di utilizzare il pacchetto _reticulate_ per integrare degli script in Python e gestire l'ambiente locale per la loro esecuzione.
+- creare un progetto *shiny app* 
+
+
+- install git, a version control system that allows us to easily manage changes out files
+- install renv, is a dependecy manager used for tracking changes of every lines of code, enables us to coordinate work during software development.  It also allows us to use the _reticulate_ package to integrate scripts into Python and manage the local environment for their execution.
+- configure a *shiny app* project 
+
+## Collect Data with Python
+
+## Shiny App
+A reactive expression is an R expression that uses widget input and returns a value. The reactive expression will update this value whenever the original widget changes.
+
+## Reddit 
+
+##
+#### Overview of dataset 
+#### Set up data 
+#### Clean data 
+#### Prepare Data 
+
+## Data Analysis
+## Network Data
+## 
+
+## Network Analysis 
+
+## Text Mining 
+
+## 
+
