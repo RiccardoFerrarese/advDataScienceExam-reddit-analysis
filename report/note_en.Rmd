@@ -1,0 +1,16 @@
+---
+title: "Report_EN"
+author: "Riccardo Ferrarese"
+date: "13/04/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Setup Project
+
+- install git, a version control system that allows us to easily manage changes out files
+- install renv, is a dependecy manager used for tracking changes of every lines of code, enables us to coordinate work during software development.  It also allows us to use the _reticulate_ package to integrate scripts into Python and manage the local environment for their execution.
+- configure a *shiny app* project 

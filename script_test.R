@@ -67,28 +67,6 @@ graph_topcom_doge %>%
    # discrete colour legend
    scale_color_gradient(guide = 'legend')
 
-all_id <- unique( net_top_usr$author.x )
-
-# take all unique id for parent_id
-nodes <- tibble(
-   name = all_id
-)
-
-edges <- tibble(
-   from = net_top_usr$author.x , 
-   to = net_top_usr$author.y
-)
-
-g = tbl_graph(nodes = nodes, edges = edges, directed = F)
-
-ggraph(g, layout = "kk") + 
-   geom_edge_link() + 
-   geom_node_point(size=0.2)
-
-
-ggraph(g, layout = "circ") + 
-   geom_edge_link(alpha=0.3) + 
-   geom_node_point(size=0.2)
 
 
 

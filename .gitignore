@@ -2,3 +2,9 @@
 .Rhistory
 .RData
 .Ruserdata
+
+.renv/
+.renv.lock
+.rsconnect/
+
+.data/
