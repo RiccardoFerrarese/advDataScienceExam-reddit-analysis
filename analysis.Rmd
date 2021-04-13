@@ -1,0 +1,132 @@
+---
+title: "Analysis"
+author: "Riccardo Ferrarese"
+date: "9/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+```{r library}
+library(dplyr)
+library(tidyr)
+library(ggraph)
+library(tidygraph)
+library(lubridate)
+library(igraph)
+```
+
+
+```{r}
+
+doge_com_raw_data <- read.csv("../data/dogecoin_com.csv")
+
+# eth_sub_raw_data <- read.csv("../ScrapData/data/dogecoin_sub.csv")
+
+# id is for the comment, link_id is the submission's id, and parent_id is the id of the parent of the comment, which can be either another comment or the submission.
+
+doge_sub_raw_data <- read.csv('../data/dogecoin_sub.csv')
+
+```
+
+```{r commet_per_date}
+
+plot_com_per_date <- function(dataset, created_utc, link_id){
+   # dataset must be contain created_utc & link_id
+   df_date <- dataset %>%
+      select(created_utc, link_id) %>%
+      group_by(link_id) %>% 
+      mutate(date = as.Date(as_datetime(created_utc)))
+      
+   df_date%>%
+      group_by(date) %>%
+      summarise(n_com = n()) %>%
+      arrange(date) %>%
+      ggplot(aes(date, n_com)) +
+         geom_line(size = 0.3) +
+         xlab("Date") + 
+         ylab("Number of Comment") + 
+         theme_minimal()
+}
+
+# not usefull 
+plot_sub_per_date <- function(dataset, create_utc, id){
+   # dataset must be contain created_utc & link_id
+   dataset %>%
+      mutate(date = as.Date(as_datetime(created_utc))) %>%
+      group_by(date) %>%
+      arrange(date) %>%
+      ggplot(aes(date, dataset$num_comment)) +
+         geom_line(size = 0.3) +
+         xlab("Date") + 
+         ylab("Submission") + 
+         theme_minimal()
+}
+ 
+# plot for date of comment 
+plot_com_for_date(doge_com_raw_data, doge_com_raw_data$created_utc, doge_com_raw_data$link_id)
+
+doge_com <- sub_per_date %>%
+   filter( date > as.Date('2020-12-31'))
+
+# 2021-01-29	219575			
+# 2021-01-30	159410			
+# 2021-01-31	102823	
+          
+```
+
+```{r net_com}
+
+compute_top_usr_net <- function(dataset_source, author, link_id, num_usr=1000){
+   
+   author_link_unique <- dataset_source %>%
+      select(author, link_id) %>%
+      filter(author != '[deleted]' & author != 'AutoModerator') %>%
+      group_by(link_id) %>%
+      unique()
+   
+   # remove source data 
+   remove(dataset_source)
+   
+   # numero di post in cui ogni utente ha interagito 
+   top_usr <- author_link_unique %>% 
+      group_by(author) %>% 
+      summarise( n_aut = n()) %>% 
+      ungroup() %>% 
+      arrange(-n_aut) %>% 
+      head(num_usr)
+   
+   ## take usr with most comment
+   top_usr_info <- author_link_unique %>%
+      filter( author %in% top_usr$author)
+
+   # join for track interaction between most "important" usr 
+   net_top_usr <- top_usr_info %>%
+      inner_join(top_usr_info, by='link_id') %>%
+      filter(author.x != author.y) %>%
+      select(author.x, author.y, link_id)
+   
+   # write it on file 
+   write.csv(net_top_usr, file="./data/usr_doge_net",
+          row.names=FALSE)
+}
+
+compute_top_usr_net(doge_com_raw_data, doge_com_raw_data$author, doge_com_raw_data$link_id)
+
+```
+
+
+```{r text_com}
+
+# for each author and link id
+# take body 
+
+
+```
+
+```{r}
+
+
+```

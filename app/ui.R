@@ -1,63 +1,47 @@
 
 library(shiny)
 library(bslib)
-library(shinydashboard)
 
-body <- dashboardBody(
-  
-  tabItems(
-    # First tab content
-    tabItem(tabName = "dashboard",
-            fluidRow(
-              box(plotOutput("plot1", height = 250)),
-              
-              box(
-                title = "Controls",
-                sliderInput("slider", "Number of observations:", 1, 100, 50)
-              )
-            )
-    ),
-    
-    # Second tab content
-    tabItem(tabName = "widgets",
-            h2("Widgets tab content")
-    )
+myModuleUI <- function(id){
+  ns <- NS(id)
+  tagList(
+    navbarPage(title = "Reddit App",
+               id = "inNavBar",
+             
+               tabPanel(title='About', 
+                        value ='1', 
+                        mainPanel(
+                          ns("text"), 
+                          ns("plot")
+                        )),
+               tabPanel(title = "DogeCoin", 
+                        value ='2', 
+                        mainPanel(
+                          ns("text"), 
+                          ns("plot")
+                        )),
+               tabPanel(title = "ETH", 
+                        value ='3', 
+                        mainPanel(
+                          ns("text"), 
+                          ns("plot")
+                        )),
+               tabPanel(title = "WallStreeBeats", 
+                        value ='4', 
+                        mainPanel(
+                          ns("text"), 
+                          ns("plot")
+                        ))
+               )
   )
-)
-
-sidebar <- dashboardSidebar(
-  sidebarMenu(
-    menuItem("Dashboard", tabName = "dashboard", icon = icon("dashboard")),
-    menuItem("Widgets", tabName = "widgets", icon = icon("th")),
-    menuItemOutput("menuitem")
-))
-
-dashboard <- dashboardPage(
-  dashboardHeader(title="DataScience App"),
-  
-  sidebar, 
-  body
-)
+               
+}
 
 
-sidebar_ <- sidebarPanel(
-  box()
-)
 
-navbar <- navbarPage("Reddit App",
-                     tabsetPanel(
-                       tabPanel(title='About'),
-                        tabPanel(title = "DogeCoin", sidebar_),
-                        tabPanel(title = "ETH", body),
-                        tabPanel(title = "WallStreeBeats")
-                     )
-)
 
-# Define UI for application that draws a histogram
-ui <- shinyUI(
-  fluidPage(
-  theme = bs_theme(bootswatch = 'simplex'),
-  navbar,
-  
-))
-  
+ ### module for about
+ ### module for other body 
+## DogeCoin call general plot func with its data
+## Eth call general plot func with its data
+## ecc.. 
