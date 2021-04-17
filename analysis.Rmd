@@ -3,19 +3,28 @@ title: "Analysis"
 author: "Riccardo Ferrarese"
 date: "9/4/2021"
 output: html_document
+bibliography: bibliography.bib
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
 ```
 
-```{r library}
+```{r library echo=FALSE}
+
+# general lib for manipulate data
 library(dplyr)
 library(tidyr)
+library(tidyverse)
+
+# lib for network analysis
 library(ggraph)
 library(tidygraph)
 library(lubridate)
-library(igraph)
+
+# lib for text mining
+library(tidytext)
+library(quanteda)
 ```
 
 
@@ -33,13 +42,16 @@ doge_sub_raw_data <- read.csv('../data/dogecoin_sub.csv')
 
 ```{r commet_per_date}
 
-plot_com_per_date <- function(dataset, created_utc, link_id){
-   # dataset must be contain created_utc & link_id
+# data must have cols : (created_utc, link_id )
+# dataset : source dataset
+plot_com_per_date <- function(dataset){
+
    df_date <- dataset %>%
       select(created_utc, link_id) %>%
       group_by(link_id) %>% 
-      mutate(date = as.Date(as_datetime(created_utc)))
+      mutate(date = as.Dzate(as_datetime(created_utc)))
       
+   
    df_date%>%
       group_by(date) %>%
       summarise(n_com = n()) %>%
@@ -66,7 +78,7 @@ plot_sub_per_date <- function(dataset, create_utc, id){
 }
  
 # plot for date of comment 
-plot_com_for_date(doge_com_raw_data, doge_com_raw_data$created_utc, doge_com_raw_data$link_id)
+plot_com_for_date(doge_com_raw_data)
 
 doge_com <- sub_per_date %>%
    filter( date > as.Date('2020-12-31'))
@@ -77,20 +89,28 @@ doge_com <- sub_per_date %>%
           
 ```
 
-```{r net_com}
 
-compute_top_usr_net <- function(dataset_source, author, link_id, num_usr=1000){
+
+```{r net_func}
+
+# data must have cols : (created_utc, author, link_id )
+# dataf : source dataset
+# file_name: name for save network tidy data 
+# num_usr: number of top user to extract (bound to 50 usr for computability)
+compute_top_usr_net <- function(dataf, file_name, num_usr){
    
-   author_link_unique <- dataset_source %>%
+   if(num_usr>100){errorCondition("Too much user for compute graph visualization")}
+   
+   author_link_unique <- dataf %>%
       select(author, link_id) %>%
       filter(author != '[deleted]' & author != 'AutoModerator') %>%
       group_by(link_id) %>%
       unique()
    
-   # remove source data 
-   remove(dataset_source)
+   # remove source data for save space in env 
+   remove(dataf)
    
-   # numero di post in cui ogni utente ha interagito 
+   # number of post which each author interact with 
    top_usr <- author_link_unique %>% 
       group_by(author) %>% 
       summarise( n_aut = n()) %>% 
@@ -98,35 +118,300 @@ compute_top_usr_net <- function(dataset_source, author, link_id, num_usr=1000){
       arrange(-n_aut) %>% 
       head(num_usr)
    
-   ## take usr with most comment
+   # take usr with most comment
    top_usr_info <- author_link_unique %>%
       filter( author %in% top_usr$author)
 
-   # join for track interaction between most "important" usr 
+   # join for track interaction between most "top" usr 
    net_top_usr <- top_usr_info %>%
       inner_join(top_usr_info, by='link_id') %>%
       filter(author.x != author.y) %>%
       select(author.x, author.y, link_id)
    
    # write it on file 
-   write.csv(net_top_usr, file="./data/usr_doge_net",
+   write.csv(net_top_usr, file=file_name,
           row.names=FALSE)
+   
+   return(top_usr_info)
 }
 
-compute_top_usr_net(doge_com_raw_data, doge_com_raw_data$author, doge_com_raw_data$link_id)
+doge_com_raw_data <- read.csv("../data/dogecoin_com.csv")
+top_usr_info <- compute_top_usr_net(doge_com_raw_data, "./data/usr_doge_net50", 50)
+
+```
+
+```{r net_doge}
+usr_net <- read.csv('data/usr_doge_net50')
+
+usr_net %>% rename(
+   from = author.x, 
+   to = author.y, 
+   post_id = link_id
+)
+
+graph_topcom_doge <- usr_net %>% 
+   as_tbl_graph()
+
+graph_topcom_doge %>% 
+   activate(nodes) %>%
+   # compute centrality 
+   mutate(eigenv = centrality_eigen()) %>%
+   activate(edges) %>%
+   mutate(betweenness = centrality_edge_betweenness()) %>%
+   ggraph(layout='kk') +
+   geom_edge_link(aes(colour = link_id),  show.legend = FALSE) + # width=betweenness
+   geom_node_point(aes(size = eigenv, alpha = eigenv), colour = 'black' ) + 
+   geom_node_text(aes(label = name),  repel = TRUE)
+
+## non calcolo il pagerank essendo un grafo indiretto 
+# 
+   
+```
+```{r}
+
+# in questo caso la betweeness potrebbe essere intesa come l'influeza che un nodo ha avendo interagito con 
+# diversi commenti, e quindi molto attivo nella comunità interagendo con molte persone diverse
+# e quindi si trova su più shortest path 
+
+graph_topcom_doge %>% 
+   activate(nodes) %>%
+   # compute influence
+   mutate(betweenness = centrality_betweenness()) %>%
+   ggraph(layout='kk') +
+   geom_edge_link(aes( colour = link_id), size=0.1, show.legend = FALSE) +
+   geom_node_point(aes(size = betweenness, alpha = betweenness) )+ 
+   geom_node_text(aes(label = name),  repel = TRUE)
 
 ```
 
 
-```{r text_com}
+## Text Analysis of Comments
 
-# for each author and link id
-# take body 
+```{r text_mining}
+
+# data must have cols : (created_utc, author, body )
+create_corpus_from_rawdata <- function(data){
+   
+   data_clean <- data %>%
+      mutate(date = as.Date(as_datetime(created_utc))) %>%
+      mutate(id = row_number()) %>%
+      select(id, date, author, body) 
+   
+   # remove source data for save space
+   remove(data)
+   
+   corpus <- corpus( as.character(data_clean$body), 
+                     docnames = data_clean$id, 
+                     docvars = data.frame(data_clean$author, data_clean$date))
+
+   return(list("df" = data_clean, "corpus" = corpus))
+}
+
+# make corpus data 
+if(!(exists('doge_com_raw_data'))){
+   doge_com_raw_data <- read.csv("../data/dogecoin_com.csv")
+}
+
+data <- create_corpus_from_rawdata(doge_com_raw_data)
+
+corpus_doge <- data$corpus
+doge_txt <- data$df
+
+head(corpus_doge, 2)
+head(doge_txt, 2)
+
+```
+
+```{r tokenize-tidy}
+### tokenize and remove stop words
+
+# data :: text corpus 
+create_tidy_corpus <- function(data, stop=TRUE){
+   
+   # tokenize and remove stop word 
+   if(stop){
+      corpus_toks <- dfm(
+         tokens_select(
+            tokens(data,
+                   remove_punct = TRUE, 
+                   remove_symbols = TRUE, 
+                   remove_numbers = TRUE, 
+                   remove_url = TRUE),
+          pattern = stopwords("en"), selection = "remove"))
+   } else {
+      corpus_toks <- dfm( 
+         tokens(corpus_doge, 
+                  remove_punct = TRUE, 
+                  remove_symbols = TRUE, 
+                  remove_numbers = TRUE, 
+                  remove_url = TRUE))
+   }
+   
+
+   # use quanteda for pass corpus to tidy 
+   tidy_data <- corpus_toks %>%
+      tidy() %>%
+      unnest_tokens(word, term)  %>%                      ## mutate term in word
+      mutate(word = str_extract(word,  "[a-z]+")) %>%     ## extract word without weird char
+      mutate(word = gsub(" *\\b[[:alpha:]]{1,2}\\b *", '', word)) %>%     ## remove word with 1-2 letter
+      filter( word != "" )
+
+   return(tidy_data)
+}
+
+tidy_doge <- create_tidy_corpus_nostop(corpus_doge)
+```
 
 
+### General Word & Sentiment for subreddit 
+
+```{r}
+# lib for side by side plot 
+library(patchwork)
+
+# data :: tidy corpus 
+compute_plot_freq_of_word <- function(data){
+   # aggregate same word 
+   count_word <- aggregate(cbind(count) ~ word, data=data, FUN=sum)
+   # total of frequency of all word 
+   total_of_word <- sum(count_word$count)
+   count_word <- count_word %>%
+      mutate( total_of_word = total_of_word ) %>%
+      mutate( frequency = count/total_of_word)
+   
+   # plot 
+   plot_freq <- count_word %>%
+      filter( frequency > 0.001) %>%
+      ggplot(aes(word, frequency)) + 
+         geom_point(alpha = 0.3, size = 2.5, width = 0.25, height = 0.1) + # jitter points
+         geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) + # dont overlap labels
+         theme_minimal() + 
+         theme(axis.text.x=element_blank()) 
+   
+   plot_count <- count_word %>%
+      filter( count > 15) %>%   ## con frequenza dello 0.001 -> count 22.9
+      ggplot(aes(word, count)) + 
+         geom_point(alpha = 0.3, size = 2.5, width = 0.25, height = 0.1) + # jitter points
+         geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) + # dont overlap labels
+         theme_minimal() + 
+         theme(axis.text.x=element_blank()) 
+
+   print(plot_freq + plot_count)
+   
+   return(count_word)
+}
+
+word_frequency <- compute_plot_freq_of_word(tidy_doge)
+
+```
+
+```{r stemming_sentiment}
+
+# lib for sentiment dataset
+library(textdata)
+get_sentiments("nrc")
+
+# data :: word_frequency
+plot_class_sentiment <- function(data){
+   # inner join with nrc sentiment
+   sentiment_class <- data %>%
+      inner_join(get_sentiments("nrc"), by='word') %>%
+      group_by(sentiment) %>%
+      summarise(word_4_sentiment = n()) %>% 
+      arrange(-word_4_sentiment, sentiment) 
+   
+   # plot number of word for each sentiment class
+   plot <- sentiment_class %>% 
+               ggplot(aes(word_4_sentiment, sentiment, fill=sentiment)) + 
+               geom_col( show.legend = FALSE) + 
+               xlab("") +
+               theme_minimal() 
+   
+   print(plot)
+   return(sentiment_class)
+}
+
+
+plot_class_sentiment(word_frequency)
 ```
 
 ```{r}
+# data :: word_frequency 
+plot_word_per_sentiment <- function(data){
+   
+   # function for normalize value between (0-1]
+   # usefull for afinn sentiment who have value [-4, 4]
+   range01 <- function(x){(x-min(x)+1)/(max(x)-min(x)+1)}
+   
+   # plot positive-negative -- color: how much positive/negative is a word
+   plot <- data %>% 
+         inner_join(get_sentiments("afinn")) %>%
+         inner_join(get_sentiments("bing")) %>%
+         filter( count > 2 ) %>%  
+         mutate( value_std = range01(value)) %>%
+         ggplot( aes(word, count,  color = value_std)) +
+            geom_jitter(alpha = 0.2, width=0.2, height = 0.1) + # jitter points
+            geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) + # dont overlap labels
+            facet_wrap(~sentiment) +
+            theme_minimal() + 
+            theme(axis.text.x=element_blank(), 
+                  legend.position = "bottom") + 
+            labs( color = "Sentiment degree")
+   
+   print(plot)
+}
+
+plot_word_per_sentiment(word_frequency)
+
+```
+
+## N-grams
+
+```{r}
+
+create_tidy_corpus_ngrams <- function(data, ngrams=2, stop=TRUE){
+   
+   # tokenize and remove stop word 
+   if(stop){
+      corpus_toks <- dfm(
+         tokens_select(
+            tokens(data,
+                   remove_punct = TRUE, 
+                   remove_symbols = TRUE, 
+                   remove_numbers = TRUE, 
+                   remove_url = TRUE),
+          pattern = stopwords("en"), selection = "remove"))
+   } else {
+      corpus_toks <- dfm( 
+         tokens(corpus_doge, 
+                  remove_punct = TRUE, 
+                  remove_symbols = TRUE, 
+                  remove_numbers = TRUE, 
+                  remove_url = TRUE))
+   }
+   
+
+   # use quanteda for pass corpus to tidy 
+   tidy_data <- corpus_toks %>%
+      tidy() %>%
+      unnest_tokens(word, term)  %>%                      ## mutate term in word
+      mutate(word = str_extract(word,  "[a-z]+")) %>%     ## extract word without weird char
+      mutate(word = gsub(" *\\b[[:alpha:]]{1,2}\\b *", '', word)) %>%     ## remove word with 1-2 letter
+      filter( word != "" )
+
+   return(tidy_data)
+}
+
+
 
 
 ```
+
+
+```{r}
+
+```
+
+
+
+

@@ -9,6 +9,12 @@ output: pdf_document
 knitr::opts_chunk$set(python.reticulate=FALSE, echo = TRUE)
 ```
 
+#### questions todo
+- Who are the most active users (in terms of number of posts and length of the messages)? 
+
+- How did these emotions change over time? 
+
+
 # Analysis of Cyrpto Topic on Reddit 
 
 ## Setup App
