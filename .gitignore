@@ -8,3 +8,9 @@
 .rsconnect/
 
 .data/
+
+Project/renv/
+
+Project/report/note.pdf
+
+Project/report/note_en.Rmd
