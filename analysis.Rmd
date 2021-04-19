@@ -8,14 +8,39 @@ bibliography: bibliography.bib
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      # record the current time before each chunk
+      now <<- Sys.time()
+    } else {
+      # calculate the time difference after a chunk
+      res <- difftime(Sys.time(), now)
+      # return a character string to show the time
+      paste("Time for this code chunk to run:", res)
+    }
+  }
+}))
+
 ```
 
-```{r library echo=FALSE}
+```{r}
+install.packages()
+install.packages()
+
+```
+
+```{r library, echo=FALSE}
 
 # general lib for manipulate data
 library(dplyr)
 library(tidyr)
 library(tidyverse)
+
+# lib for side by side plot 
+library(patchwork)
 
 # lib for network analysis
 library(ggraph)
@@ -25,6 +50,10 @@ library(lubridate)
 # lib for text mining
 library(tidytext)
 library(quanteda)
+
+# lib for sentiment dataset
+library(textdata)
+
 ```
 
 
@@ -185,231 +214,176 @@ graph_topcom_doge %>%
 ```
 
 
-## Text Analysis of Comments
-
-```{r text_mining}
-
-# data must have cols : (created_utc, author, body )
-create_corpus_from_rawdata <- function(data){
-   
-   data_clean <- data %>%
-      mutate(date = as.Date(as_datetime(created_utc))) %>%
-      mutate(id = row_number()) %>%
-      select(id, date, author, body) 
-   
-   # remove source data for save space
-   remove(data)
-   
-   corpus <- corpus( as.character(data_clean$body), 
-                     docnames = data_clean$id, 
-                     docvars = data.frame(data_clean$author, data_clean$date))
-
-   return(list("df" = data_clean, "corpus" = corpus))
-}
-
-# make corpus data 
-if(!(exists('doge_com_raw_data'))){
-   doge_com_raw_data <- read.csv("../data/dogecoin_com.csv")
-}
-
-data <- create_corpus_from_rawdata(doge_com_raw_data)
-
-corpus_doge <- data$corpus
-doge_txt <- data$df
-
-head(corpus_doge, 2)
-head(doge_txt, 2)
-
+```{r doge-unigrams}
+doge_tidy <- create_tidy_corpus(corpus_doge)
+doge_clean_tidy <- clean_corpus_tidy(doge_tidy)
+doge_word_counts <- compute_plot_count_and_freq(doge_clean_tidy)
 ```
 
-```{r tokenize-tidy}
-### tokenize and remove stop words
-
-# data :: text corpus 
-create_tidy_corpus <- function(data, stop=TRUE){
-   
-   # tokenize and remove stop word 
-   if(stop){
-      corpus_toks <- dfm(
-         tokens_select(
-            tokens(data,
-                   remove_punct = TRUE, 
-                   remove_symbols = TRUE, 
-                   remove_numbers = TRUE, 
-                   remove_url = TRUE),
-          pattern = stopwords("en"), selection = "remove"))
-   } else {
-      corpus_toks <- dfm( 
-         tokens(corpus_doge, 
-                  remove_punct = TRUE, 
-                  remove_symbols = TRUE, 
-                  remove_numbers = TRUE, 
-                  remove_url = TRUE))
-   }
-   
-
-   # use quanteda for pass corpus to tidy 
-   tidy_data <- corpus_toks %>%
-      tidy() %>%
-      unnest_tokens(word, term)  %>%                      ## mutate term in word
-      mutate(word = str_extract(word,  "[a-z]+")) %>%     ## extract word without weird char
-      mutate(word = gsub(" *\\b[[:alpha:]]{1,2}\\b *", '', word)) %>%     ## remove word with 1-2 letter
-      filter( word != "" )
-
-   return(tidy_data)
-}
-
-tidy_doge <- create_tidy_corpus_nostop(corpus_doge)
+```{r doge-unigrams-sentiment}
+plot_class_sentiment(doge_word_counts)
 ```
 
-
-### General Word & Sentiment for subreddit 
-
-```{r}
-# lib for side by side plot 
-library(patchwork)
-
-# data :: tidy corpus 
-compute_plot_freq_of_word <- function(data){
-   # aggregate same word 
-   count_word <- aggregate(cbind(count) ~ word, data=data, FUN=sum)
-   # total of frequency of all word 
-   total_of_word <- sum(count_word$count)
-   count_word <- count_word %>%
-      mutate( total_of_word = total_of_word ) %>%
-      mutate( frequency = count/total_of_word)
-   
-   # plot 
-   plot_freq <- count_word %>%
-      filter( frequency > 0.001) %>%
-      ggplot(aes(word, frequency)) + 
-         geom_point(alpha = 0.3, size = 2.5, width = 0.25, height = 0.1) + # jitter points
-         geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) + # dont overlap labels
-         theme_minimal() + 
-         theme(axis.text.x=element_blank()) 
-   
-   plot_count <- count_word %>%
-      filter( count > 15) %>%   ## con frequenza dello 0.001 -> count 22.9
-      ggplot(aes(word, count)) + 
-         geom_point(alpha = 0.3, size = 2.5, width = 0.25, height = 0.1) + # jitter points
-         geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) + # dont overlap labels
-         theme_minimal() + 
-         theme(axis.text.x=element_blank()) 
-
-   print(plot_freq + plot_count)
-   
-   return(count_word)
-}
-
-word_frequency <- compute_plot_freq_of_word(tidy_doge)
-
-```
-
-```{r stemming_sentiment}
-
-# lib for sentiment dataset
-library(textdata)
-get_sentiments("nrc")
-
-# data :: word_frequency
-plot_class_sentiment <- function(data){
-   # inner join with nrc sentiment
-   sentiment_class <- data %>%
-      inner_join(get_sentiments("nrc"), by='word') %>%
-      group_by(sentiment) %>%
-      summarise(word_4_sentiment = n()) %>% 
-      arrange(-word_4_sentiment, sentiment) 
-   
-   # plot number of word for each sentiment class
-   plot <- sentiment_class %>% 
-               ggplot(aes(word_4_sentiment, sentiment, fill=sentiment)) + 
-               geom_col( show.legend = FALSE) + 
-               xlab("") +
-               theme_minimal() 
-   
-   print(plot)
-   return(sentiment_class)
-}
-
-
-plot_class_sentiment(word_frequency)
+```{r doge-word-sentiment}
+plot_word_per_sentiment(doge_word_counts, n_filter = 10)
 ```
 
 ```{r}
-# data :: word_frequency 
-plot_word_per_sentiment <- function(data){
-   
-   # function for normalize value between (0-1]
-   # usefull for afinn sentiment who have value [-4, 4]
-   range01 <- function(x){(x-min(x)+1)/(max(x)-min(x)+1)}
-   
-   # plot positive-negative -- color: how much positive/negative is a word
-   plot <- data %>% 
-         inner_join(get_sentiments("afinn")) %>%
-         inner_join(get_sentiments("bing")) %>%
-         filter( count > 2 ) %>%  
-         mutate( value_std = range01(value)) %>%
-         ggplot( aes(word, count,  color = value_std)) +
-            geom_jitter(alpha = 0.2, width=0.2, height = 0.1) + # jitter points
-            geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) + # dont overlap labels
-            facet_wrap(~sentiment) +
-            theme_minimal() + 
-            theme(axis.text.x=element_blank(), 
-                  legend.position = "bottom") + 
-            labs( color = "Sentiment degree")
-   
-   print(plot)
-}
-
-plot_word_per_sentiment(word_frequency)
-
-```
-
-## N-grams
-
-```{r}
-
-create_tidy_corpus_ngrams <- function(data, ngrams=2, stop=TRUE){
-   
-   # tokenize and remove stop word 
-   if(stop){
-      corpus_toks <- dfm(
-         tokens_select(
-            tokens(data,
-                   remove_punct = TRUE, 
-                   remove_symbols = TRUE, 
-                   remove_numbers = TRUE, 
-                   remove_url = TRUE),
-          pattern = stopwords("en"), selection = "remove"))
-   } else {
-      corpus_toks <- dfm( 
-         tokens(corpus_doge, 
-                  remove_punct = TRUE, 
-                  remove_symbols = TRUE, 
-                  remove_numbers = TRUE, 
-                  remove_url = TRUE))
-   }
-   
-
-   # use quanteda for pass corpus to tidy 
-   tidy_data <- corpus_toks %>%
-      tidy() %>%
-      unnest_tokens(word, term)  %>%                      ## mutate term in word
-      mutate(word = str_extract(word,  "[a-z]+")) %>%     ## extract word without weird char
-      mutate(word = gsub(" *\\b[[:alpha:]]{1,2}\\b *", '', word)) %>%     ## remove word with 1-2 letter
-      filter( word != "" )
-
-   return(tidy_data)
-}
-
-
-
-
+remove(doge_tidy)
+remove(doge_clean_tidy)
+remove(doge_word_counts)
 ```
 
 
-```{r}
+```{r doge-bigrams}
+doge_tidy_bigrams <- create_tidy_corpus(corpus_doge, ngrams=2)
+doge_clean_tidy_bigrams <- clean_corpus_tidy(doge_tidy_bigrams, ngrams = 2)
+doge_bigrams_counts <- compute_plot_count_and_freq(doge_clean_tidy_bigrams, 
+                                                   threshold_freq = 0.0003,
+                                                   ngrams = 2)
+```
 
+```{r doge-bigrams-sentiment}
+bigrams_class_sentiment <- plot_class_sentiment(doge_bigrams_counts, n_filter_sentiment = 2500, ngrams = 2)
+```
+
+
+```{r doge-bigrams-word-sentiment}
+bigrams_sentiment <- plot_word_per_sentiment(doge_bigrams_counts, n_filter = 10, ngrams = 2)
+```
+
+
+```{r net-bigrams}
+word_network(doge_bigrams_counts)
+```
+
+```{r}
+remove(doge_tidy_bigrams)
+remove(doge_clean_tidy_bigrams)
+remove(doge_bigrams_counts)
+```
+
+
+
+```{r doge-trigrams, time_it=TRUE}
+doge_tidy_trigrams <- create_tidy_corpus(corpus_doge, ngrams=3)
+doge_clean_tidy_trigrams <- clean_corpus_tidy(doge_tidy_trigrams, ngrams = 3)
+doge_trigrams_counts <- compute_plot_count_and_freq(doge_clean_tidy_trigrams, 
+                                                   threshold_freq = 0.00001,
+                                                   bool_plot_count = FALSE,
+                                                   bool_plot_frequency  = FALSE,
+                                                   ngrams = 3)
+```
+
+```{r doge-trigrams-sentiment, time_it=TRUE}
+plot_class_sentiment(doge_trigrams_counts, n_filter_sentiment = 450, ngrams = 3)
+```
+
+```{r doge-trigrams-word-sentiment, time_it=TRUE}
+plot_word_per_sentiment(doge_trigrams_counts, n_filter = 2, ngrams = 3)
+```
+
+```{r net-trigrams}
+word_network(doge_trigrams_counts, n_filter=400)
+```
+
+```{r}
+remove(doge_tidy_trigrams)
+remove(doge_clean_tidy_trigrams)
+remove(doge_trigrams_counts)
+```
+
+
+
+
+
+
+
+
+
+
+```{r}
+# sentiment over time 
+# time in doge_txt
+
+# compute sentiment for each comment 
+# inner join with id for extract data 
+# group by day 
+
+## data :: clean_tidy_bigrams
+compute_sentiment_per_comment <- function(tidy_clean_bigrams, data_txt){
+   
+   sentiment_per_doc <- tidy_clean_bigrams  %>% 
+            inner_join(get_sentiments("afinn"), by=c('word1'= 'word')) %>%
+            inner_join(get_sentiments("bing"), by=c('word1'= 'word')) %>%
+            inner_join(get_sentiments("afinn"), by=c('word2'= 'word')) %>%
+            inner_join(get_sentiments("bing"), by=c('word2'= 'word')) %>%
+            mutate( affin = (value.x + value.y) / 2) %>%
+            mutate( bing = case_when(sentiment.x == 'positive' & sentiment.y == 'positive' ~ 'positive', 
+                                     sentiment.x == 'negative' & sentiment.y == 'negative' ~ 'negative',
+                                     TRUE ~ 'neutral')) %>%
+            mutate( affin_nrm = range01(affin)) %>%
+            unite(words, c("word1", "word2"), sep = " ") %>%
+            mutate(id = as.integer(document)) %>%
+            select(id, words, affin_nrm, bing)
+
+   sentiment_per_comment <- data_txt %>%
+      inner_join(doge_txt, by='id') %>%
+      select(date, author, id, words, affin_nrm, bing)
+   
+}
+
+
+
+
+# Sentiment polarity for an element defines the orientation of the expressed sentiment, i.e., it determines if the text expresses the positive, negative or neutral sentiment of the user about the entity in consideration.
+
+std_nrm <- function(x){
+   mean <- mean({{x}})
+   std <- sd({{x}})
+   norm <- (x - mean)/std
+   return(norm)
+}
+
+over_time_sentiment <- sentiment_per_comment %>%
+         count(bing, date) %>%
+         spread(bing, n, fill = 0) %>%
+         mutate(polarity = (positive + neutral*4) - (negative + neutral*2)) %>%
+         mutate(polarity_nrm = std_nrm(polarity))
+         
+                #percent_positive = positive / (positive + negative) * 100)
+min(over_time_sentiment$polarity_nrm)
+max(over_time_sentiment$polarity_nrm)
+
+   
+plot_year_sentiment<- function(data, in_year){
+     plot <- data %>%
+         mutate(year = year(date)) %>%
+         filter(year == in_year) %>%
+         mutate(month = month(date)) %>%
+         mutate(dayMonth = as.numeric(day(date))) %>%
+        ggplot(aes(dayMonth, polarity, color= I(ifelse(polarity >= 0, 'green3', 'orangered2')))) +
+        geom_col() +
+        geom_smooth(method = "loess", se = FALSE, aes(color='black')) +
+        geom_smooth(method = "lm", se = FALSE, aes(color='steelblue1') ) +
+        facet_grid(facets = month ~ ., margins = FALSE)+
+        scale_y_continuous(trans = scales::pseudo_log_trans()) +
+        theme_minimal() + theme(plot.title = element_text(size = 11),
+                                legend.position = 'none')+
+        xlab(NULL) + ylab(NULL) +
+        ggtitle("Polarity Over Time")
+     
+     print(plot)
+}
+
+
+```
+```{r}
+plot_year_sentiment(over_time_sentiment, "2021")
+```
+
+```{r ,fig.height=200}
+plot_year_sentiment(over_time_sentiment, "2020")
 ```
 
 
