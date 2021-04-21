@@ -54,7 +54,7 @@ library(textdata)
 library(textstem)
 
 # lib for stemming words
-library(hunspell)
+# library(hunspell)
 library(SnowballC)
 
 ```
