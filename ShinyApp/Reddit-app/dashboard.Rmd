@@ -1,0 +1,80 @@
+---
+title: "Untitled"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+# general lib for manipulate data
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+
+# lib for side by side plot 
+library(patchwork)
+
+# lib for network analysis
+library(ggraph)
+library(tidygraph)
+library(lubridate)
+
+# lib for text mining
+library(tidytext)
+library(quanteda)
+
+# lib for sentiment dataset
+library(textdata)
+
+# lib for lemmatize words
+library(textstem)
+
+# lib for stemming words
+library(hunspell)
+library(SnowballC)
+source("./function.R")
+
+#doge_txt <- read.csv("./Data/doge_txt.csv")
+doge_corpus <- readRDS("./Data/doge_corpus.rds")
+```
+
+Page 1 {data-orientation=rows}
+=====================================  
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+```{r, include=FALSE}
+doge_tidy <- create_tidy_corpus(doge_corpus)
+# todo: hunspell approach to stemming (not porter algorithm)
+doge_clean_tidy <- compute_clean_corpus_tidy(doge_tidy, lemma = FALSE, stemming = TRUE)
+```
+
+### Chart A
+
+```{r, results='hide'}
+
+doge_word_counts <- compute_plot_count_and_freq(doge_clean_tidy)
+
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Chart B
+
+```{r,  results='hide'}
+plot_class_sentiment(doge_word_counts)
+```
+
+### Chart C
+
+```{r,  results='hide'}
+plot_word_per_sentiment(doge_word_counts, n_filter = 10)
+```
+
+Page 2 {data-orientation=rows}
+=====================================  

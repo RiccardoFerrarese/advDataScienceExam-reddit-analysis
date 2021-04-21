@@ -26,11 +26,6 @@ knitr::knit_hooks$set(time_it = local({
 
 ```
 
-```{r}
-install.packages()
-install.packages()
-
-```
 
 ```{r library, echo=FALSE}
 
@@ -291,99 +286,6 @@ word_network(doge_trigrams_counts, n_filter=400)
 remove(doge_tidy_trigrams)
 remove(doge_clean_tidy_trigrams)
 remove(doge_trigrams_counts)
-```
-
-
-
-
-
-
-
-
-
-
-```{r}
-# sentiment over time 
-# time in doge_txt
-
-# compute sentiment for each comment 
-# inner join with id for extract data 
-# group by day 
-
-## data :: clean_tidy_bigrams
-compute_sentiment_per_comment <- function(tidy_clean_bigrams, data_txt){
-   
-   sentiment_per_doc <- tidy_clean_bigrams  %>% 
-            inner_join(get_sentiments("afinn"), by=c('word1'= 'word')) %>%
-            inner_join(get_sentiments("bing"), by=c('word1'= 'word')) %>%
-            inner_join(get_sentiments("afinn"), by=c('word2'= 'word')) %>%
-            inner_join(get_sentiments("bing"), by=c('word2'= 'word')) %>%
-            mutate( affin = (value.x + value.y) / 2) %>%
-            mutate( bing = case_when(sentiment.x == 'positive' & sentiment.y == 'positive' ~ 'positive', 
-                                     sentiment.x == 'negative' & sentiment.y == 'negative' ~ 'negative',
-                                     TRUE ~ 'neutral')) %>%
-            mutate( affin_nrm = range01(affin)) %>%
-            unite(words, c("word1", "word2"), sep = " ") %>%
-            mutate(id = as.integer(document)) %>%
-            select(id, words, affin_nrm, bing)
-
-   sentiment_per_comment <- data_txt %>%
-      inner_join(doge_txt, by='id') %>%
-      select(date, author, id, words, affin_nrm, bing)
-   
-}
-
-
-
-
-# Sentiment polarity for an element defines the orientation of the expressed sentiment, i.e., it determines if the text expresses the positive, negative or neutral sentiment of the user about the entity in consideration.
-
-std_nrm <- function(x){
-   mean <- mean({{x}})
-   std <- sd({{x}})
-   norm <- (x - mean)/std
-   return(norm)
-}
-
-over_time_sentiment <- sentiment_per_comment %>%
-         count(bing, date) %>%
-         spread(bing, n, fill = 0) %>%
-         mutate(polarity = (positive + neutral*4) - (negative + neutral*2)) %>%
-         mutate(polarity_nrm = std_nrm(polarity))
-         
-                #percent_positive = positive / (positive + negative) * 100)
-min(over_time_sentiment$polarity_nrm)
-max(over_time_sentiment$polarity_nrm)
-
-   
-plot_year_sentiment<- function(data, in_year){
-     plot <- data %>%
-         mutate(year = year(date)) %>%
-         filter(year == in_year) %>%
-         mutate(month = month(date)) %>%
-         mutate(dayMonth = as.numeric(day(date))) %>%
-        ggplot(aes(dayMonth, polarity, color= I(ifelse(polarity >= 0, 'green3', 'orangered2')))) +
-        geom_col() +
-        geom_smooth(method = "loess", se = FALSE, aes(color='black')) +
-        geom_smooth(method = "lm", se = FALSE, aes(color='steelblue1') ) +
-        facet_grid(facets = month ~ ., margins = FALSE)+
-        scale_y_continuous(trans = scales::pseudo_log_trans()) +
-        theme_minimal() + theme(plot.title = element_text(size = 11),
-                                legend.position = 'none')+
-        xlab(NULL) + ylab(NULL) +
-        ggtitle("Polarity Over Time")
-     
-     print(plot)
-}
-
-
-```
-```{r}
-plot_year_sentiment(over_time_sentiment, "2021")
-```
-
-```{r ,fig.height=200}
-plot_year_sentiment(over_time_sentiment, "2020")
 ```
 
 

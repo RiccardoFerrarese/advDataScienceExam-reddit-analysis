@@ -1,0 +1,13 @@
+name: reddit-app
+title:
+username:
+account: ricf
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 3999003
+bundleId: 4495003
+url: https://ricf.shinyapps.io/reddit-app/
+when: 1618917890.48381
+lastSyncTime: 1618917890.48382
+asMultiple: FALSE
+asStatic: FALSE

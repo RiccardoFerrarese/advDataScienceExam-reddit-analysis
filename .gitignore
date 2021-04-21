@@ -14,3 +14,7 @@ Project/renv/
 Project/report/note.pdf
 
 Project/report/note_en.Rmd
+
+*.pdf
+
+Project/Data/
