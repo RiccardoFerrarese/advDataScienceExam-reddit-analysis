@@ -26,7 +26,20 @@ knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE,
 
 ## Setup App
 
-Le librerie utilizzate per eseguire l'analisi dei dati estratti da reddit sono le seguenti: 
+Per la gestione del progetto sono state utilizzati anche i seguenti pacchetti: 
+
+- installare [*git*](http://try.github.io/), sistema per il controllo del versionamento 
+- installare [*renv*](https://blog.rstudio.com/2019/11/06/renv-project-environments-for-r/), permette di creare un ambiente di esecuzione isolato per la gestione delle dipendenze. Permette anche di utilizzare il pacchetto _reticulate_ per integrare degli script in Python e gestire l'ambiente locale per la loro esecuzione.
+
+
+Per eseguire il progetto, dopo aver clonato il repository da github, è necessario impostare la working directory per installare i pacchetti necessari e utilizzare le funzioni del pacchetto _renv_: 
+
+```
+setwd("~./<clone-dir>/Project")
+renv::restore()                  # packages dependecies write on renv.lock
+```
+
+Le librerie utilizzate per eseguire l'analisi dei dati estratti dalla piattaforma Reddit sono le seguenti: 
 
 ```{r library, result='hide'}
 
@@ -59,11 +72,6 @@ library(SnowballC)
 
 ```
 
-Per la gestione del progetto sono state utilizzati anche i seguenti pacchetti: 
-
-- installare [*git*](http://try.github.io/), sistema per il controllo del versionamento 
-- installare [*renv*](https://blog.rstudio.com/2019/11/06/renv-project-environments-for-r/), permette di creare un ambiente di esecuzione isolato per la gestione delle dipendenze. Permette anche di utilizzare il pacchetto _reticulate_ per integrare degli script in Python e gestire l'ambiente locale per la loro esecuzione.
-- *shiny app* per creare l'applicazione shiny per visualizzare i risultati
 
 ## Reddit 
 
@@ -239,7 +247,7 @@ In questa sezione si mostrano le funzione definite per manipolare, pulire e visu
 
 Si è scelto di definire delle funzioni il più generali possibili, in modo tale da rendere più efficiente l'analisi di diversi dataset che condividono le stesse variabili esplicative. Le stesse funzioni possono inoltre esser utilizzate nel server della _shiny app_. 
 
-La prima funzione definita verrà utilizzata per creare il dataset di partenza (chiamato _corpus_) a partire dai dati grezzi salvati in formato csv dallo script in Python. L'algoritmo esegue i seguenti passaggi: 
+La prima funzione definita (_create\_corpus\_from\_rawdata_) verrà utilizzata per creare il dataset di partenza a partire dai dati grezzi salvati in formato csv dallo script in Python. L'algoritmo esegue i seguenti passaggi: 
 - converte in un formato comodo per R la colonna rappresentate le date di creazione dei commenti. - aggiunge un id per ogni riga. 
 - rimuove i commenti cancellati o quelli che sono stati sottoposti ad una moderazione. 
 - crea il corpus utilizzando la funzione messa a disposizione dal pacchetto _quanteda_. 
@@ -271,11 +279,11 @@ create_corpus_from_rawdata <- function(data){
 }
 ```
 
-Le seguenti tre funzioni hanno lo scopo di calcolare i _token_ per ciascun commento, eseguire una pulizia di essi ed calcolare le ripetizioni di ciascuno. 
+Le seguenti tre funzioni hanno lo scopo di calcolare i _token_ per ciascun commento, eseguire una pulizia di essi e calcolare le ripetizioni di ciascuna parola. 
 
-La funzione che calcola i token permette di scegliere, tramite argomento, se calcolare i token contenenti una singola parola oppure se calcolare i bigrammi o trigrammi per eseguire un'analisi tenendo conto del contesto tra le diverse parole che si trovano 'vicine' nel commento. 
+La funzione che calcola i token permette di scegliere, tramite argomento, se calcolare i token rispetto singola parola oppure se calcolarli come bigrammi o trigrammi, in modo tale da poter eseguire un'analisi tenendo conto delle relazioni tra le diverse parole adiacenti in uno stesso commento. 
 
-Successivamente le parole vengono filtrate in modo tale da rimuove caratteri speciali che si trovano agli estremi di esse, infatti reddit permette di inserire dei caratteri speciali per enfatizzare le parole, similmente all' _underscore_ e asterischi nel formato markdown. Inoltre vengono rimosse le parole formate da uno e due caratteri, in modo tale da ridurre il numero di onomatopee che vengono utilizzate nel linguaggio dei messaggi. Questa scrematura non basta per avere le solo parole con un significato compiuto nel dataset, ma dal momento che 'parole' prive di significato avranno poche ripetizioni all'interno di tutto il corpus di testo, potranno esser rimosse successivamente dai grafici con un filtro sul conteggio. 
+Successivamente le parole vengono filtrate in modo tale da rimuove caratteri speciali che si trovano agli estremi di esse, infatti reddit permette di inserire dei caratteri per enfatizzare le parole, similmente all' _underscore_ e altri  nel formato Markdown. Inoltre vengono rimosse le parole formate da uno e due caratteri, in modo tale da ridurre il numero di onomatopee che vengono utilizzate nel linguaggio dei messaggi. Questa scrematura non è risultata sufficiente per costruire un dataset con solo parole con un significato compiuto, ma dal momento che 'parole' prive di significato avranno poche ripetizioni all'interno di tutto il corpus di testo, potranno esser rimosse successivamente dai grafici con un filtro sul conteggio. Inoltre per l'analisi del sentimento un gran numero di parole non troveranno un accoppiamento nei dataset messi a disposizioni, tra queste anche quelle prive di significato. 
 
 Dopo una prima pulitura delle parole è possibile, tramite argomento della funzione, specificare se si vuole o meno eseguire lo _stemming_ oppure la _lemmatization_. Nel caso di questa analisi si è scelto di utilizzare lo stemming essendo che la lemmatizzazione potrebbe portare ad alcuni cambiamenti morfologici della parole. La lemmatizzazione potrebbe causare una distorsione di parole che nel campo finanziario acquisiscono un preciso significato oppure rischierebbe di alterare la successiva analisi dei sentimenti del testo. 
 
@@ -702,7 +710,7 @@ word_network <- function(data, n_filter=1000){
 ```{r}
 
 if(!(exists('doge_com_raw_data'))){
-   doge_com_raw_data <- read.csv("../../data/dogecoin_com.csv")
+   doge_com_raw_data <- read.csv("../../../data/dogecoin_com.csv")
 }
 
 data <- create_corpus_from_rawdata(doge_com_raw_data)
@@ -730,11 +738,12 @@ plot_class_sentiment(doge_word_counts)
 ```
 
 ```{r doge-word-sentiment}
-plot_word_per_sentiment(doge_word_counts, n_filter = 10)
+doge_word_sentiment <- plot_word_per_sentiment(doge_word_counts, n_filter = 10)
 ```
 
-```{r doge-word-sentiment}
-plot_word_per_sentiment(doge_word_counts_stem, n_filter = 10)
+```{r diff-source-word-sentiment-word}
+
+
 ```
 
 ```{r}
