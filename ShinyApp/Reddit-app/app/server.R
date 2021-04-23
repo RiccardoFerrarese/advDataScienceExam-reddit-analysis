@@ -6,16 +6,21 @@ library(ggplot2)
 # and reactive endpoints are accessible through the output object
 
 # Define server logic for change navbar
-server <- function(input, output, session){
-      
-   rv <- reactiveValues()
-   observeEvent(input$navBarID, {
-      rv$tab <- input$navBarID
-      updateTabsetPanel(session, "inNavBar",
-                        selected =  input$navBarID
-      )})
+textServer <- function(id, df){
    
-   output$text <- output$text2<- renderText({paste0("You are viewing tab \"", rv$tab, "\"")})
-   #output$text-eth <- renderText({paste0("You are viewing tab \"", input$navBarID, "\"")})
+   moduleServer(id, function(input, output, session) {
+      rv <- reactiveValues()
+      observeEvent(input$navBarID, {
+         rv$tab <- input$navBarID
+         updateTabsetPanel(session, "inNavBar",
+                           selected = input$navBarID
+         )
+      })
+      
+      output$text <-
+         output$text2 <-
+         renderText({
+            paste0("You are viewing tab \"", rv$tab, "\"")
+         })
+   })
 }
-
