@@ -6,6 +6,13 @@ output: html_document
 bibliography: bibliography.bib
 ---
 
+## Appunti 
+
+create corpus from raw :: return dataframe raw and corpus for comment 
+create tidy corpus :: return dfm and tidy(dfm) 
+
+corpus per post :: take dataframe raw data (( add to first func )) 
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
 
