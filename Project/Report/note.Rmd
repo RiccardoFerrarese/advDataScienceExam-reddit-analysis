@@ -223,6 +223,13 @@ time: 194798997.85995483 ~~ 3,25h
 
 ## Overview of Datasets
 
+Alcune osservazioni sui dati: 
+- tutti i dati testuali fanno parte di commenti scritti da persone su un social network
+- si hanno un enorme quantità di parole scritte male o senza significato 
+- le regex non sono sufficienti 
+- hunspell 
+- 
+
 
 ## Text Analysis 
 
@@ -248,11 +255,13 @@ La prima funzione definita (_create\_corpus\_from\_rawdata_) verrà utilizzata p
 - rimuove i commenti cancellati o quelli che sono stati sottoposti ad una moderazione. 
 - crea il corpus utilizzando la funzione messa a disposizione dal pacchetto _quanteda_. 
 
+- todo creation of different corpus
+
 ```{r text_mining}
 
-# data must have cols : (created_utc, author, body )
+## data must have cols : (created_utc, author, body )
 # data is pushshift's returned csv
-create_corpus_from_rawdata <- function(data){
+create_corpus_from_rawdata <- function(data, subR, filter_post=5){
    
    # compute type date
    # add unique id for each comment 
@@ -264,15 +273,45 @@ create_corpus_from_rawdata <- function(data){
       distinct( author, date, body, parent_id, link_id, .keep_all= TRUE) %>%
       select(id, date, author, body, parent_id, link_id) 
    
-   # remove source data for save space
+   ## remove source data for save space
    remove(data)
    
+   # DF for Corpus by POST 
+   df_post <- data_clean %>% 
+      select(link_id, body) %>%
+      # aggregate comment whith same postID
+      aggregate(by=list(data_clean$link_id), paste) %>% 
+      # compute num of element in body list for each postID
+      mutate( n_com = unlist(map(link_id, length))) %>%
+      rename("postID" = "Group.1") %>% 
+      select(postID, body, n_com) %>% 
+      # group by post ID and merge senteces in body
+      group_by(postID) %>%
+      mutate( body = paste( do.call( c , body), collapse = ". ") ) %>%
+      ungroup() %>%
+      # filtra post con meno di 5 commenti 
+      filter(n_com > filter_post)
+     
+   
+   
+   post_corpus <- corpus(df_post$body, 
+            docnames = df_post$postID, 
+            docvars = data.frame(df_post$n_com))
+ 
    # quanteda corpus function 
    corpus <- corpus( as.character(data_clean$body), 
                      docnames = data_clean$id, 
                      docvars = data.frame(data_clean$author, data_clean$date, data_clean$link_id))
-
-   return(list("df" = data_clean, "corpus" = corpus))
+   
+   print(summary(data_clean[ c("id", "date", "author")] ))
+   
+   rtn <- list("df_comm" = data_clean, 
+               "df_post" = df_post, 
+               "corpus_comm" = corpus, 
+               "corpus_post" = post_corpus ) 
+   saveRDS(rtn, paste0("./", subR, sep = ""))
+                  
+   return(rtn)
 }
 ```
 
@@ -287,9 +326,112 @@ Dopo una prima pulitura delle parole è possibile, tramite argomento della funzi
 - sentiment with lammatization 
 - count with stemming 
 
+```
+From RawData -> to DataFrame + Comment_Corpus 
+
+From Comment_Corpus -> to DFM + TIDY for each n-grams {1,2,3}
+   toks with or without stop word 
+   apply stemming or lemmatization 
+   
+From DataFrame -> Post_Corpus
+   todo: topic analysis
+   
+
+--> return clean df for ngrams 
+
+from tidy : 
+FROM Count & Plot -> to : 
+               - Sentiment Class
+               - Words Sentiment
+               - Words Net
+
+from dfm: 
+   - test stats quanteda 
+   - wordcloud quanteda 
+
+
+
+```
+
+###### Count Func
 
 ```{r corpus-tidy-count-function}
-## tokenize corpus and make document-feature matrix
+
+## func for clean a little bit the words
+# data for dyplr pipe -- 
+#          curly-curly impl.  := to assign, 
+#                             {{}} to ref a cols in data, 
+#                             !!! access to the value
+# data:: tidy text object 
+# word:: ref to cols in data 
+apply_regex <- function(data, word){
+   
+   ## use curly-curly for word cols
+   data %>% 
+      mutate( {{word}} := str_extract({{word}},  "[a-z]+")) %>%
+      # rimuove spazi ecc
+      mutate( {{word}} := gsub("[[:punct:]]", "", {{word}})) %>%
+      # word with all same char
+      mutate( {{word}} := gsub("^([:alpha:])\1+", "", {{word}})) %>%
+      mutate( {{word}} := gsub("^(a){5}[a-z]*", "", {{word}})) %>%
+      # word with 1 or 2 char
+      mutate( {{word}} := gsub("^[a-z]{1,2}\\b", "", {{word}})) %>%
+      
+      # word with numeber
+      # mutate( word = gsub("^(\\d)+", "", word)) %>%
+      
+      # laughing word 
+      mutate( {{word}} := gsub("\\b(?:a*(?:ha)+h?|h*ha+h[ha]*|(?:l+o+)+l+|o?l+o+l+[ol]*)\\b", "", {{word}}) ) %>%
+      filter( {{word}} != "" ) 
+
+}
+
+## function for lemmatization, stemming or POS for words, bi-grams and tri-grams
+# data:: tidy text object 
+# mode:: {"lemma", "stem", "other"} default is "none" 
+# words{1,2,3}:: ref to cols in data 
+words_manipulation <- function(data, word1, word2, word3, mode = "none", ngrams = 3){
+
+         
+   if(mode == "lemma"){
+      if(ngrams == 2){
+         data <- data %>%
+            mutate({{word1}} := textstem::lemmatize_words({{word1}})) %>%
+            mutate({{word2}} := textstem::lemmatize_words({{word2}}))
+      } else if(ngrams == 3){
+         data <- data %>%
+            mutate({{word1}} := textstem::lemmatize_words({{word1}})) %>%
+            mutate({{word2}} := textstem::lemmatize_words({{word2}})) %>%
+            mutate({{word3}} := textstem::lemmatize_words({{word3}})) 
+         
+      }else {
+         data %>%
+            mutate( {{word1}} := textstem::lemmatize_words({{word1}})) 
+         
+      }
+   } else if(mode == "stem"){
+      if(ngrams == 2){
+         data %>%
+            mutate({{word1}} := SnowballC::wordStem({{word1}}, language = "english")) %>%
+            mutate({{word2}} := SnowballC::wordStem({{word2}}, language = "english"))
+      } else if(ngrams == 3){
+         data %>%
+            mutate({{word1}} := SnowballC::wordStem({{word1}}, language = "english")) %>%
+            mutate({{word2}} := SnowballC::wordStem({{word2}}, language = "english")) %>%
+            mutate({{word3}} := SnowballC::wordStem({{word3}}, language = "english"))
+      }else {
+         data %>%
+            mutate({{word1}} := SnowballC::wordStem({{word1}}, language = "english"))
+         
+      }
+   } else if(mode == "")
+   return(data)
+}
+
+```
+
+```{r}
+## tokenize corpus and make document-feature matrix (DFM + TIDY)
 # data :: text corpus 
 # stop :: bool for remove stop word
 # ngrams :: {1,2,3} for compute corpus on ngrams
@@ -334,10 +476,11 @@ create_tidy_corpus <- function(data, stop=TRUE, eng_word = FALSE, ngrams=1){
 ## function for clean data and separate ngrams 
 # tidy :: dataframe compute by create corpus ( tidy dfm )
 # ngrams :: {1,2,3} for compute corpus on ngrams
-compute_clean_corpus_tidy <- function(tidy, ngrams=1, stemming=FALSE, lemma=TRUE){
+compute_clean_corpus_tidy <- function(tidy, ngrams=1, mode = "none"){
    
    if(stemming & lemma){stop("Please choose only one between stemming vs lemmatization")}
-   # check ngrams and build clean dataframe
+   
+   #### check ngrams and build clean dataframe
    if(ngrams == 2){
       clean_df <- tidy %>%
          ## mutate term in word
@@ -345,84 +488,39 @@ compute_clean_corpus_tidy <- function(tidy, ngrams=1, stemming=FALSE, lemma=TRUE
          ## divide bigrams in words
             tidyr::separate(words, c("word1", "word2"), sep = " " )   %>%       
             filter( word1 != word2 & word2 != word1 ) %>%
-         ## extract word without weird char
-            mutate(word1 = str_extract(word1,  "[a-z]+"))  %>%                   
-            mutate(word2 = str_extract(word2,  "[a-z]+")) %>% 
-         ## remove word with 1-2 letter
-            mutate(word1 = gsub(" *\\b[[:alpha:]]{1,2}\\b *", '', word1)) %>%
-            mutate(word2 = gsub(" *\\b[[:alpha:]]{1,2}\\b *", '', word2)) %>%
-            filter(word1 != "", 
-                   word2 != "")
-      
-      ## lemmatize words
-      if(lemma){
-         clean_df <- clean_df %>%
-            mutate(word1 = textstem::lemmatize_words(word1)) %>%
-            mutate(word2 = textstem::lemmatize_words(word2))
-      ## stemming words
-      } else if(stemming){
-         clean_df <- clean_df %>%
-            mutate(word1 = SnowballC::wordStem(word1, language = "english")) %>%
-            mutate(word2 = SnowballC::wordStem(word2, language = "english"))
-      }
+         # apply some regex
+            apply_regex(word1)  %>%                   
+            apply_regex(word2) %>%
+         # apply stemming or lemmatiz ..
+            words_manipulation(word1, word2, mode = mode , ngrams = ngrams)
       
    } else if (ngrams == 3){
       clean_df <- tidy %>%
             unnest_tokens(words, term, token = "ngrams", n=3) %>%                     
             tidyr::separate(words, c("word1", "word2", "word3"), sep = " " ) %>%   
             filter( word1 != word2 & word2 != word3 & word1 != word3 ) %>%
-            mutate(word1 = str_extract(word1,  "[a-z]+"))  %>%                         
-            mutate(word2 = str_extract(word2,  "[a-z]+")) %>% 
-            mutate(word3 = str_extract(word3,  "[a-z]+")) %>% 
-            mutate(word1 = gsub(" *\\b[[:alpha:]]{1,2}\\b *", '', word1)) %>%
-            mutate(word2 = gsub(" *\\b[[:alpha:]]{1,2}\\b *", '', word2)) %>%
-            mutate(word3 = gsub(" *\\b[[:alpha:]]{1,2}\\b *", '', word3)) %>%
-            filter(word1 != "", 
-                   word2 != "", 
-                   word3 != "")
+            mutate(word1 = apply_regex(word1)) %>%                   
+            mutate(word2 = apply_regex(word2)) %>%
+            mutate(word3 = apply_regex(word3)) %>%
+            words_manipulation(word1, word2, word3, mode = mode , ngrams = ngrams)
       
-            ## lemmatize words
-      if(lemma){
-         clean_df <- clean_df %>%
-            mutate(word1 = textstem::lemmatize_words(word1)) %>%
-            mutate(word2 = textstem::lemmatize_words(word2)) %>%
-            mutate(word3 = textstem::lemmatize_words(word3)) 
-      ## stemming words
-      } else if(stemming){
-         clean_df <- clean_df %>%
-            mutate(word1 = SnowballC::wordStem(word1, language = "english")) %>%
-            mutate(word2 = SnowballC::wordStem(word2, language = "english")) %>%
-            mutate(word3 = SnowballC::wordStem(word3, language = "english"))
-      }
-       
+      
    } else {
       clean_df <- tidy %>%
             unnest_tokens(words, term)  %>%                      
-            mutate( words = str_extract(words,  "[a-z]+")) %>%   
-            mutate( words = gsub(" *\\b[[:alpha:]]{1,2}\\b *", '', words)) %>%     
-            #mutate( words = gsub("^(?!\b(.)\1+\b)", '', words)) %>%
-            filter( words != "" ) 
-            ## lemmatize words
-      if(lemma){
-         clean_df <- clean_df %>%
-            mutate(words = textstem::lemmatize_words(words)) 
-      ## stemming words
-      } else if(stemming){
-         clean_df <- clean_df %>%
-            mutate(words = SnowballC::wordStem(words, language = "english"))
-                   # with porter buy -> bui 
-      }
-      
+            mutate(words = apply_regex(words))    %>%
+            words_manipulation(words, mode = mode, ngrams = ngrams)
    }
    
    return(clean_df)
 }
 
 ## function for word (or ngrams) counts and plot 
-# data :: clean dataframe compute by compute clean corpus ( tidy dfm )
+# data :: clean df TIDY DFM 
+
+# ngrams :: {1,2,3} for compute corpus on ngrams
 # threshold_count :: value to filter items by count for pritty plot
 # threshold_freq :: value to filter items by frequency for pritty plot
-# ngrams :: {1,2,3} for compute corpus on ngrams
 # bool_plot_count :: boolean to indicate whether to plot word counts or not 
 # bool_plot_freq :: boolean to indicate whether to plot word frequencies or not
 compute_plot_count_and_freq <- function(data, threshold_count=1000, threshold_freq=0.001, ngrams=1, 
@@ -497,7 +595,9 @@ Di seguito è stata definita una funzione per visualizzare con un differente gra
 
 Verrà utilizzata anche la funzione _textplot\_wordcloud_ per rendere più piacevole e veloce il riconoscimento delle parole più frequenti.
 
-```{r}
+###### Sentiment
+
+```{r dfm-txt-stat}
 library("quanteda.textstats")
 
 quanteda_frequency <- function(dfm){
@@ -739,12 +839,32 @@ Topic modelling aggregando tutte i commenti di un certo post ... per ogni row co
 https://gensimr.news-r.org/reference/model_lda.html
 ```
 
-### DogeCoin's Subreddit
+## DogeCoin's Subreddit
+
+### Overview of Dataset 
+
+```{r}
+if(!(exists('doge_com_raw_data'))){
+   doge_com_raw_data <- read.csv("../Data/dogecoin_com.csv")
+}
+
+data <- create_corpus_from_rawdata(doge_com_raw_data, "dogecoin")
+```
+```{r}
+summary(data$df_post)
+```
+```{r}
+doge_post <- create_tidy_corpus(data$corpus_post)
+doge_post_bi <- create_tidy_corpus(data$corpus_post, ngrams = 2)
+
+quanteda_frequency
+```
+
 
 ```{r}
 
 if(!(exists('doge_com_raw_data'))){
-   doge_com_raw_data <- read.csv("../../../data/dogecoin_com.csv")
+   doge_com_raw_data <- read.csv("../Data/dogecoin_com.csv")
 }
 
 data <- create_corpus_from_rawdata(doge_com_raw_data)
@@ -768,33 +888,6 @@ head(doge_txt, 2)
 doge_txt %>% 
    filter(link_id == 't3_ccjlvc') 
    
-# data :: dataframe from create_corpus_from_rawdata
-corpus_per_post <- function(data){
-
-      post_corpus <- doge_txt %>% 
-         select(link_id, body) %>%
-         # aggregate comment whith same postID
-         aggregate(by=list(doge_txt$link_id), paste) %>% 
-         # compute num of element in body list for each postID
-         mutate( n_com = unlist(map(link_id, length))) %>%
-         rename("postID" = "Group.1") %>% 
-         select(postID, body, n_com) %>% 
-         # group by post ID and merge senteces in body
-         group_by(postID) %>%
-         mutate( body = paste( do.call( c , body), collapse = ". ") ) %>%
-         ungroup() %>%
-         # filtra post con meno di 5 commenti 
-         filter(n_com > 5)
-        
-      
-      
-      post_corpus <- corpus(post_corpus$body, 
-               docnames = post_corpus$postID, 
-               docvars = data.frame(post_corpus$n_com))
-
-
-      return(post_corpus)
-}
 
 
 doge_post_corpus <- corpus_per_post("none")
@@ -808,11 +901,6 @@ doge_post_count <- compute_plot_count_and_freq(doge_clean_post, bool_plot_freque
 
    
 head(corpus_doge)
-
-sent_reshape <- corpus_reshape(corpus_doge, to = "sentences")
-
-head(sent_reshape)
-
 
 library(stringr)
 
