@@ -1,5 +1,5 @@
 ---
-title: "Note"
+title: "Analysis of topics about cryptocurrencies on Reddit"
 author: "Riccardo Ferrarese"
 date: "19/3/2021"
 output: pdf_document
@@ -16,16 +16,26 @@ knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE,
                       results = 'hide', 
                       out.width = "80%"
                       )
-knitr::knit_hooks$set(crop = knitr::hook_pdfcrop)
+knitr::knit_hooks$set(crop = knitr::hook_pdfcrop) 
 ```
 
-#### questions todo
+
+
+## Introduction
+
+
+
+#### Initial Questions
+
 - Who are the most active users (in terms of number of posts and length of the messages)? 
 
-- How did these emotions change over time? 
+- How did these emotions change over time?
 
 
-# Analysis of topics about cryptocurrencies on Reddit
+
+#### Dataset Issues
+
+
 
 ## Setup App
 
@@ -37,7 +47,7 @@ Per la gestione del progetto sono state utilizzati i seguenti pacchetti:
 
 Per eseguire il progetto in R, dopo aver clonato il repository da github, è necessario impostare la working directory per installare i pacchetti necessari e utilizzare le funzioni del pacchetto _renv_: 
 
-```
+```{r include=FALSE}
 setwd("~./<clone-dir>/Project")
 install.packages("renv")                 # packages dependecies write on renv.lock
 
@@ -76,11 +86,35 @@ library(textstem)
 # lib for stemming words
 library(hunspell)
 library(SnowballC)
-
 ```
 
 
-## Reddit 
+
+Per installare l'ambiente necessario ad eseguire lo script in python e per eseguire l'analisi con la piattaforma **spacy** è consigliato installare un ambiente con conda. 
+
+We will use conda to manage virtual environments. Create the environment from file in git: 
+
+```shell
+conda env create -f environment.devev.yml --name dsproject
+```
+
+Type the next command for check the env and activate it: 
+
+```shell
+conda env list
+conda activate dsproject
+```
+
+For trouble use pip: 
+
+```shell
+conda install -n dsproject pip
+conda activate dsprojectc
+```
+
+
+
+# Reddit 
 
 Reddit, a differenza della maggior parte dei social-network maggiormente utilizzati, non presenta un meccanismo per scegliere una cerchia di utenti con cui interagire (per intenderci,  i followers su Twitter o Instagram), tuttavia il modo in cui è organizzato permette all'utente di interagire in diversi forums, ognuno di uno specifico argomento, nel quale interagirà con gli altri utenti che 'seguo' lo stesso _subreddit_. Inoltre sulla pagina generale si possono trovare i post più popolari di tutta la piattaforma. 
 
@@ -91,6 +125,8 @@ Ogni utente può eseguire un numero illimitato di interazioni con la piattaforma
 Un ulteriore particolarità di questa piattaforma è che gli utenti sono allo stesso modo creatore di contenuti, consumatori e curatori delle informazioni in esso. Utilizza infatti un sistema a punteggio, tramite _upvotes_ e _downvotes_ da parte degli utenti, per determinare i contenuti e le discussioni con maggior interesse e che verrano mostrati nei primi contenuti della pagina. 
 
 Pur permettendo agli utenti di mantenere l'anonimicità utilizzando un nome utente a piacere, Reddit tiene traccia di tutte le attività di ogni profilo inclusi i post e i commenti effettuati. 
+
+
 
 
 ## Collect Data with Python
@@ -194,7 +230,6 @@ class Miner(object):
         data = pd.DataFrame([x for x in res_])
         data.to_csv(f"./data/{self.subreddit}_com.csv")
         print(f"write {self.subreddit}_com.csv")
-    
 ```
 
 E' stato utilizzato un _rate-limit_ per imposta un numero di richieste all'API pari a 100 al minuto, leggermente superiore al limite di default (1 richesta per secondo) ma leggermente inferiore al limite imposto dalle richieste al minuto massime che si possono effettuare senza subire un ritardo. 
@@ -223,8 +258,8 @@ Checkpoint:: Success Rate: 30.75% - Requests: 400 - Batches: 40 - Items Remainin
 
 write ./doge_sub.csv
 time: 194798997.85995483 ~~ 3,25h 
-
 ```
+
 
 
 ## Overview of Datasets
@@ -235,6 +270,7 @@ Alcune osservazioni sui dati:
 - le regex non sono sufficienti 
 - hunspell 
 - 
+
 
 
 ## Text Analysis 
@@ -269,9 +305,9 @@ dfm_frequency <- function(dfm){
    
    return(features_dfm)
 }
-
-
 ```
+
+
 
 ### Function for Text Mining
 
@@ -279,16 +315,17 @@ In questa sezione si mostrano le funzione definite per manipolare, pulire e visu
 
 Si è scelto di definire delle funzioni il più generali possibili, in modo tale da rendere più efficiente l'analisi di diversi dataset, che condividono le stesse variabili esplicative ma riferiti a subereddit diversi. Le stesse funzioni possono inoltre esser utilizzate per uno sviluppo futuro di una _shiny app_. 
 
-La prima funzione definita (_create\_corpus\_from\_rawdata_) verrà utilizzata per creare il dataset di partenza a partire dai dati grezzi salvati in formato csv dallo script in Python. L'algoritmo esegue i seguenti passaggi: 
+La prima funzione definita , _df.create_, verrà utilizzata per creare il dataset di partenza a partire dai dati grezzi salvati in formato csv dallo script in Python. L'algoritmo esegue i seguenti passaggi: 
 - converte in un formato comodo per R la colonna rappresentate le date di creazione dei commenti. - aggiunge un id per ogni riga. 
 - rimuove i commenti cancellati o quelli che sono stati sottoposti ad una moderazione. 
 - aggregare i testi dei commenti come post. 
 - crea il corpus utilizzando la funzione messa a disposizione dal pacchetto _quanteda_.
-- 
+- salva i dataset in un oggetto R (.rds) per un utilizzo futuro
+
+
 
 
 ```{r text_mining}
-
 ## data must have cols : (created_utc, author, body )
 # data is pushshift's returned csv
 df.create <- function(data, subR, filter_post=5){

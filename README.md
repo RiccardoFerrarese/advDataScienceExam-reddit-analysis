@@ -98,7 +98,11 @@ spacy_initialize()
 
 
 
+---
 
+_note_ 
+
+​	For reading the .Rmd file, and not for its execution, I like to use [typora](https://typora.io/).
 
 
 
@@ -108,4 +112,5 @@ Open branches for future improvements:
 
 - shiny app -- modular r shiny for visualize all the data 
 - aws -- use AWS for continuously extract data
+- spacy -- improve dictionary
 
