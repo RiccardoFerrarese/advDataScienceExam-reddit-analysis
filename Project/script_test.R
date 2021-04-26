@@ -122,24 +122,17 @@ tidy_dfm %>%
 # number ^(\d)+
 
 ########################################
+### DFM ANALYSIS
 
-doge_tidy_bigrams <- create_tidy_corpus(corpus_doge, ngrams=2)
+doge_dfm_post <- doge_post$dfm
+head( docvars(doge_dfm_post))
 
-
-clean_df <- doge_tidy_bigrams$tidy%>%
-   ## mutate term in word
-   unnest_tokens(words, term, token = "ngrams", n=2) %>% 
-   ## divide bigrams in words
-   tidyr::separate(words, c("word1", "word2"), sep = " " )   %>%       
-   filter( word1 != word2 & word2 != word1 ) %>%
-   
-   # apply some regex
-   apply_regex(word1)  %>%                   
-   apply_regex(word2) %>%
-   # from 3.2ml to 2.9ml of rows
-   words_manipulation(word1, word2, mode = "lemma",  ngrams=2 )
-   # data:  2.922.826ml of rows 
+topfeatures(doge_dfm_post)
+textstat_frequency(doge_dfm_post, n = 5)
+sub_dfm <- dfm_subset(doge_dfm_post, n_com > 5)
 
 
-# cast to dfm and save 
+tstat_dist <- as.dist(textstat_dist(doge_dfm_post , margin = "documents", min_simil = 0.5))
+clust <- hclust(tstat_dist)
+plot(clust, xlab = "Distance", ylab = NULL)
 

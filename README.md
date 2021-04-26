@@ -26,7 +26,7 @@ All the configuration for library and environments is a report's section. But he
 We will use conda to manage virtual environments. Create the environment from file in git: 
 
 ```shell
-conda env create -f environment.yml --name dsproject
+conda env create -f environment.devev.yml --name dsproject
 ```
 
 Type the next command for check the env and activate it: 
@@ -92,8 +92,11 @@ library(spacyr)
 spacy_install()
 conda_list()		# see if spacy_condaenv was created 
 spacy_initialize()
-
 ```
+
+
+
+
 
 
 
