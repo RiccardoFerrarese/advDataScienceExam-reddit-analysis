@@ -354,7 +354,7 @@ df.create <- function(data, subR, filter_post=5){
       select(postID, body, n_com) %>% 
       # group by post ID and merge senteces in body
       group_by(postID) %>%
-      mutate( body = paste( do.call( c , body), collapse = ". ") ) %>%
+      mutate( body = paste( do.call( c , body), collapse = "\n ") ) %>%
       ungroup() %>%
       # filtra post con meno di 5 commenti 
       filter(n_com > filter_post)
