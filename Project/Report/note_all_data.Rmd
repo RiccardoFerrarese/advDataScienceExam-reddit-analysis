@@ -1,4 +1,24 @@
+---
+   title: "Analysis of topics about cryptocurrencies on Reddit"
+author: "Riccardo Ferrarese"
+date: "19/3/2021"
+output: pdf_document
 
+---
+   
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE, 
+                      python.reticulate=FALSE, 
+                      echo = TRUE, 
+                      warning = FALSE, 
+                      cache = TRUE, 
+                      message = FALSE, 
+                      results = 'hide', 
+                      out.width = "80%"
+)
+knitr::knit_hooks$set(crop = knitr::hook_pdfcrop) 
+```
+   
 
 ```{r doge-trigrams, time_it=TRUE}
 doge_tidy_trigrams <- create_tidy_corpus(corpus_doge, ngrams=3)

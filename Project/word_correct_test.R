@@ -97,6 +97,7 @@ post_toks <- corpus.tokenize_dfmTidy(post_raw)
 # clean and tidy
 post_tidy <- corpus.clean_tidy(post_toks$tidy, mode = "lemma")
 
+
 # verify regex for digit not worked
 post_tidy %>% filter( words == regex("2"))
 
@@ -159,8 +160,8 @@ correct_spelling <- function(input) {
    output <- case_when(
       # any manual corrections
       input == 'aways' ~ 'away',
-      intut == 'covid' ~ 'covid',
-      input == 'binance' ~ 'binance'
+      input == 'covid' ~ 'covid',
+      input == 'binance' ~ 'binance',
       # check and (if required) correct spelling
       !hunspell_check(input) ~
          hunspell_suggest(input) %>%
@@ -184,10 +185,27 @@ suggest_stem_corFalse <- uncorrect_stem_check %>%
    select(count, term, suggest, term_stem, term_lem, dist_term, dist_lem, dist_source_stem)
    
 write_rds(suggest_stem_corFalse, "doge_suggest.rds")
+
+## influnce word 
+suggest_stem_corFalse %>%
+   arrange( desc(count)) %>%
+   filter(count > 500) %>%
+   select(term, suggest, term_stem, term_lem) %>%
+   View()
+
+write_csv(suggest_stem_corFalse, "doge-dic-influence.csv")
+
+suggest_stem_corFalse <- read.csv("./doge-dic-influence.csv")
+
+as.factor(suggest_stem_corFalse$count)
+# 302 levels 
+
+
 ## !! COLLAPSE SPACE IN SUGGEST 
 suggest_stem_corFalse %>%
-   filter(dist_term < 2) %>%
-   arrange( desc(count))
+   filter(count < 2) %>%
+   arrange( desc(count)) %>%
+   select( term, count )
 
 suggest <- suggest_stem_corFalse %>%
    filter(dist_term == 0 ) %>%

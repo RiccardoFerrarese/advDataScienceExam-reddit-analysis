@@ -2,8 +2,14 @@
 title: "Analysis of topics about cryptocurrencies on Reddit"
 author: "Riccardo Ferrarese"
 date: "19/3/2021"
-output: pdf_document
-
+output:
+  pdf_document: 
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 3
+  html_document:
+    df_print: paged
+bibliography: bibliography.bib
 ---
 
 ```{r setup, echo=FALSE}
@@ -14,9 +20,11 @@ knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE,
                       cache = TRUE, 
                       message = FALSE, 
                       results = 'hide', 
-                      out.width = "80%"
+                      out.width = "60%"
                       )
 knitr::knit_hooks$set(crop = knitr::hook_pdfcrop) 
+
+# bib <- "../bibliography.bib"
 ```
 
 
@@ -29,7 +37,11 @@ knitr::knit_hooks$set(crop = knitr::hook_pdfcrop)
 
 - Who are the most active users (in terms of number of posts and length of the messages)? 
 
-- How did these emotions change over time?
+- Ci potrebbe essere una relazione tra i sentimenti e gli eventi sociali ed economici relativi ai temi? E se si, quanto può esser valida? 
+
+- 
+
+word embeddings for bigrams -> word2vec
 
 
 
@@ -47,7 +59,7 @@ Per la gestione del progetto sono state utilizzati i seguenti pacchetti:
 
 Per eseguire il progetto in R, dopo aver clonato il repository da github, è necessario impostare la working directory per installare i pacchetti necessari e utilizzare le funzioni del pacchetto _renv_: 
 
-```{r include=FALSE}
+```{r eval=FALSE}
 setwd("~./<clone-dir>/Project")
 install.packages("renv")                 # packages dependecies write on renv.lock
 
@@ -76,6 +88,7 @@ library(lubridate)
 library(tidytext)
 library(quanteda)
 library(quanteda.textplots)
+library(stringdist)
 
 # lib for sentiment dataset
 library(textdata)
@@ -86,6 +99,10 @@ library(textstem)
 # lib for stemming words
 library(hunspell)
 library(SnowballC)
+
+library(tidytable)
+library(microbenchmark)
+library(quanteda.textstats)
 ```
 
 
@@ -114,7 +131,7 @@ conda activate dsprojectc
 
 
 
-# Reddit 
+## Reddit 
 
 Reddit, a differenza della maggior parte dei social-network maggiormente utilizzati, non presenta un meccanismo per scegliere una cerchia di utenti con cui interagire (per intenderci,  i followers su Twitter o Instagram), tuttavia il modo in cui è organizzato permette all'utente di interagire in diversi forums, ognuno di uno specifico argomento, nel quale interagirà con gli altri utenti che 'seguo' lo stesso _subreddit_. Inoltre sulla pagina generale si possono trovare i post più popolari di tutta la piattaforma. 
 
@@ -141,8 +158,8 @@ LIST_of_SUBREDDIT = [ 'dogecoin',
     'pancakeswap', 
     'eth',
     'ethereum', 
-    'elon', 
-    'wallstreetbets']
+    'Bitcoin',
+    'elon']
 
     start_epoch=int(dt.datetime(2020, 1, 1).timestamp())
     end_epoch=int(dt.datetime(2021, 2, 1).timestamp())
@@ -249,15 +266,12 @@ Checkpoint:: Success Rate: 36.00% - Requests: 100 - Batches: 10 - Items Remainin
 Checkpoint:: Success Rate: 29.00% - Requests: 100 - Batches: 10 - Items Remaining: 1427274
 Checkpoint:: Success Rate: 35.50% - Requests: 200 - Batches: 20 - Items Remaining: 253225
 Checkpoint:: Success Rate: 27.50% - Requests: 200 - Batches: 20 - Items Remaining: 1424674
-Checkpoint:: Success Rate: 33.00% - Requests: 300 - Batches: 30 - Items Remaining: 250824
-Checkpoint:: Success Rate: 29.33% - Requests: 300 - Batches: 30 - Items Remaining: 1421374
-Checkpoint:: Success Rate: 31.00% - Requests: 400 - Batches: 40 - Items Remaining: 248435
-Checkpoint:: Success Rate: 30.75% - Requests: 400 - Batches: 40 - Items Remaining: 1417879
+Items Remaining: 1417879
 
 [...]
 
 write ./doge_sub.csv
-time: 194798997.85995483 ~~ 3,25h 
+time: 194798997.85995483 ~~ 3.25 h 
 ```
 
 
@@ -265,15 +279,55 @@ time: 194798997.85995483 ~~ 3,25h
 ## Overview of Datasets
 
 Alcune osservazioni sui dati: 
-- tutti i dati testuali fanno parte di commenti scritti da persone su un social network
-- si hanno un enorme quantità di parole scritte male o senza significato 
-- le regex non sono sufficienti 
-- hunspell 
-- 
 
+- tutti i dati testuali fanno parte di commenti scritti da persone su un social network
+
+- si hanno un enorme quantità di parole scritte male o senza significato 
+
+- le regex non sono sufficienti 
+
+- hunspell 
 
 
 ## Text Analysis 
+
+
+### Pipeline and objects for analysis
+```
+Object for Analysis
+- corpus: --def of copurs
+. dfm: --def of dfm 
+- tokens; .. def of tokens
+
+Functions for Analysis
+- corpus.* works if word.* function for create some dataFrame, clean and counts word/ngrams
+- df.* is for the first step of each analysis 
+
+From RawData -> to DataFrame + Comment_Corpus 
+
+From Comment_Corpus -> to DFM + TIDY for each n-grams {1,2,3}
+   toks with or without stop word 
+   apply stemming or lemmatization 
+   
+From DataFrame -> Post_Corpus
+   todo: topic analysis
+   
+
+--> return clean df for ngrams 
+
+from tidy : 
+FROM Count & Plot -> to : 
+               - Sentiment Class
+               - Words Sentiment
+               - Words Net
+
+from dfm: 
+   - test stats quanteda 
+   - wordcloud quanteda 
+
+```
+
+
 
 ### Quanteda Library 
 **Quanteda** è pacchetto per R per manipolare e analizzare dati testuali in formato non-tidy, sviluppata da Kenneth Benoi, Kohei Watanabe e altri contributors. Definisce una serie di funzioni per applicare processi di NLP (Natural Language Processing) a partire da testi di qualsiasi tipo o documenti, fino all'analisi finale. 
@@ -288,21 +342,43 @@ Una funzione motlo utile messa a disposizione dal pacchetto è quella per calcol
 Potrebbe però esser utile per comparare l'insieme totale di commenti di un subreddit con il contenuto presente negli altri. 
 
 
-```{r dfm-txt-stat}
-library("quanteda.textstats")
+```{r dfm-txt-stat, reslut= 'hide'}
 
-dfm_frequency <- function(dfm){
-   features_dfm <- textstat_frequency(dfm, n = 50)
+data <- readRDS("./doge_suggest.rds" )
+data <- data[1:400, ]
+typeof(data)
 
+dfm <- dfm(data)
+dfm.frequency <- function(.dfm, n = 50){
+   
+   features_dfm <- textstat_frequency(.dfm, n)
+   
+   head(features_dfm, 10)
+   
    # Sort by reverse frequency order
    features_dfm$feature <- with(features_dfm, reorder(feature, -frequency))
-   
-   plot <- ggplot(features_dfm, aes(x = feature, y = frequency)) +
-       geom_point() + 
-       theme_minimal() +
-       theme(axis.text.x = element_text(angle = 90, hjust = 1))
-   print(plot)
-   
+
+
+   if(plot){
+      plot <- features_dfm %>%
+         ggplot(aes(x = feature, y = frequency)) +
+            geom_point(size=0.1) + 
+            scale_y_log10() + 
+            theme_classic() +
+            theme(axis.text.x = element_blank())
+      
+      features_dfm$feature <- with(features_dfm, reorder(feature, -rank))
+      #theme(axis.text.x = element_text(angle = 90, hjust = 1))
+      
+      plot2 <- features_dfm %>%
+         ggplot(aes(x = feature, y = rank)) +
+         geom_point(size=0.01) + 
+         scale_y_log10() + 
+         theme_classic() +
+         theme(axis.text.x = element_blank())
+      
+      print(plot + plot2)
+   }
    return(features_dfm)
 }
 ```
@@ -323,12 +399,10 @@ La prima funzione definita , _df.create_, verrà utilizzata per creare il datase
 - salva i dataset in un oggetto R (.rds) per un utilizzo futuro
 
 
-
-
 ```{r text_mining}
 ## data must have cols : (created_utc, author, body )
 # data is pushshift's returned csv
-df.create <- function(data, subR, filter_post=5){
+df.create <- function(data, dir, subR, filter_post=-1){
    
    # compute type date
    # add unique id for each comment 
@@ -378,7 +452,7 @@ df.create <- function(data, subR, filter_post=5){
                "df_post" = df_post, 
                "corpus_comm" = corpus, 
                "corpus_post" = post_corpus ) 
-   saveRDS(rtn, paste0("../Data/", subR, ".rds", sep = ""))
+   saveRDS(rtn, paste0(dir, subR, ".rds", sep = ""))
                   
    return(rtn)
 }
@@ -398,31 +472,6 @@ Dopo una prima pulitura delle parole è possibile, tramite argomento della funzi
 
 - sentiment with lammatization 
 - count with stemming 
-
-```
-From RawData -> to DataFrame + Comment_Corpus 
-
-From Comment_Corpus -> to DFM + TIDY for each n-grams {1,2,3}
-   toks with or without stop word 
-   apply stemming or lemmatization 
-   
-From DataFrame -> Post_Corpus
-   todo: topic analysis
-   
-
---> return clean df for ngrams 
-
-from tidy : 
-FROM Count & Plot -> to : 
-               - Sentiment Class
-               - Words Sentiment
-               - Words Net
-
-from dfm: 
-   - test stats quanteda 
-   - wordcloud quanteda 
-
-```
 
 #### Function for prepare data 
 
@@ -532,7 +581,7 @@ Dopo una prima pulitura delle parole è possibile, tramite argomento della funzi
 # data :: text corpus 
 # stop :: bool for remove stop word
 # ngrams :: {1,2,3} for compute corpus on ngrams
-corpus.tokenize_dfmTidy <- function(data, stop=TRUE, eng_word = FALSE, ngrams=1){
+corpus.tokenize_dfmTidy <- function(data, stop=TRUE, correct = FALSE, ngrams=1){
    
    # if stopword .. 
       # build toks  
@@ -552,9 +601,8 @@ corpus.tokenize_dfmTidy <- function(data, stop=TRUE, eng_word = FALSE, ngrams=1)
                          remove_url = TRUE)
    }
    
-   if( eng_word ){
-      # take a dictionary with engish word for clean data 
-      #toks <- tokens_select(toks,)
+   if( correct ){
+      # spell checking on toks
    }
    
    # if ngrams -- compute toks for bigrams or trigrams 
@@ -910,15 +958,17 @@ words.network <- function(data, n_filter=1000){
    
    print(graph)
 }
-
 ```
 
-Topic modelling aggregando tutte i commenti di un certo post ... per ogni row con parent_id concateno tutti i body dei commenti con quel parent_id 
 
-```
+
+Topic modelling aggregando tutte i commenti di un certo post 
+per ogni row con parent_id concateno tutti i body dei commenti con quel parent_id 
+
 https://gensimr.news-r.org/reference/model_lda.html
-```
 
+
+Dopo aver definito tutte le funzioni possiamo vedere come esse siano organizzate, così da poter capire il codice delle analisi di ciascun dataset. 
 ## DogeCoin's Subreddit
 
 ### Overview of Dataset 
@@ -931,10 +981,11 @@ if(!(exists('doge_com_raw_data'))){
 }
 
 # create and save data (df + corpus)
-data <- df.create(doge_com_raw_data, "dogecoin")
+data <- df.create(doge_com_raw_data, "Data", "dogecoin", filter_post = 0)
 remove(doge_com_raw_data)
 
 ```
+
 
 ```{r}
 data <- readRDS("../Data/dogecoin.rds")
@@ -951,10 +1002,35 @@ summary(data$df_post)
 com_doge <- corpus.tokenize_dfmTidy(data$corpus_comm)
 print("REDDIT's COMMENT CORPUS: ")
 print(com_doge$dfm)
-post_doge <- corpus.tokenize_dfmTidy(data$corpus_post)
+post_doge <- corpus.tokenize_dfmTidy(data$corpus_post,stop = FALSE)
 print("REDDIT's POST CORPUS: ")
 print(post_doge$dfm)
 ```
+
+```{r}
+print("stop words removed:")
+77739 - 77567 
+```
+
+
+Written texts show the remarkable feature that the rank-ordered distribution of word frequencies follows an approximate power law
+
+Display Formula [@zipfLaw]
+where r is the rank that is assigned to every word in the text. For most texts, regardless of language, time of creation, genre of literature, its purpose, etc. one finds that α ∼ 1, which is referred to as Zipf's law [1].
+
+```{r}
+print("CELLS of mem FOR DFM")
+print(prod(dim(com_doge$dfm)))
+print("SPARSITY FOR dfm")
+print(sparsity(com_doge$dfm))
+print("---")
+print("CELLS of mem FOR post DFM")
+print(prod(dim(post_doge$dfm)))
+print("SPARSITY FOR post dfm")
+print(sparsity(post_doge$dfm))
+```
+
+Bisogna utilizzare la funzione _dfm\_trim_ per eliminare alcune parole del vocabolario con conteggi di basso valore. In tal modo si possono convertire gli oggetti tidy da liste a data.frame o meglio sarebbe utilizzare la libreria _tiytable_ per le sue performance (add cite). 
 
 ```{r}
 
@@ -962,50 +1038,117 @@ print(post_doge$dfm)
 com_clean_tidy <- corpus.clean_tidy(com_doge$tidy, mode = "none")
 post_clean_tidy <- corpus.clean_tidy(post_doge$tidy, mode = "none")
 
+
 print("CLEAN COMMENT CORPUS: ")
 com_clean_dfm <- com_clean_tidy %>%
    cast_dfm(document, words, count)
-print(com_clean_dfm)
+#print(com_clean_dfm)
 
 print("CLEAN POST CORPUS: ")
 post_clean_dfm <- post_clean_tidy %>%
    cast_dfm(document, words, count)
-print(post_clean_dfm)
+#print(post_clean_dfm)
+```
 
+
+```{r}
+print("CLEAN COMMENT CORPUS DIM (docsxtoks): ")
+print(dim(com_clean_dfm))
+print("CLEAN POST CORPUS DIM: (docsxtoks)")
+print(dim(post_clean_dfm))
+print("")
+print("COLS of TIDY DF")
+print(colnames(com_clean_tidy))
+print("TYPE OF TIDY DF")
+print(typeof(com_clean_tidy))
 ```
 
 ```{r}
-library(hunspell)
-
-# compute correct word and stats 
-correct_com <- com_clean_tidy %>%
-   unnest_tokens(word, words)  %>% 
-   distinct(word) %>%
-   mutate(check = hunspell_check(word)) 
-   
-correct_post <- post_clean_tidy %>%
-   unnest_tokens(word, words)  %>% 
-   distinct(word) %>%
-   mutate(check = hunspell_check(word)) 
-   
-print(summary(correct_com))
-print(summary(correct_post))
+freq <- dfm.frequency(com_clean_dfm, 8000)
+head(freq, 10)
 ```
 
 ```{r}
+# frequency dfm clean - with stop words
+freq <- dfm.frequency(post_clean_dfm, 8000)
+head(freq, 10)
+```
+
+```{r tfidf-post}
+# compute tfidf 
+tfidf <- dfm_tfidf(post_clean_dfm)
+topfeatures(tfidf)
+```
+#### And, with stemming? 
+
+```{r}
+
+com_clean_tidy_stem <- corpus.clean_tidy(com_doge$tidy, mode = "stem")
+post_clean_tidy_stem <- corpus.clean_tidy(post_doge$tidy, mode = "stem")
+
+
+com_clean_dfm_stem <- com_clean_tidy_stem %>%
+   cast_dfm(document, words, count)
+#print(com_clean_dfm)
+
+post_clean_dfm_stem <- post_clean_tidy_stem %>%
+   cast_dfm(document, words, count)
+#print(post_clean_dfm)
+```
+
+```{r}
+print("CLEAN COMMENT CORPUS DIM (docsxtoks): ")
+print(dim(com_clean_dfm_stem))
+print("CLEAN POST CORPUS DIM: (docsxtoks)")
+print(dim(post_clean_dfm_stem))
+print("")
+print("COLS of TIDY DF")
+print(colnames(com_clean_tidy_stem))
+print("TYPE OF TIDY DF")
+print(typeof(com_clean_tidy_stem))
+```
+```{r}
+# frequency dfm clean - with stemming
+freq <- dfm.frequency(com_clean_dfm_stem, 8000)
+head(freq, 10)
+```
+
+```{r}
+# frequency dfm clean - with stop words - stemming
+freq <- dfm.frequency(post_clean_dfm_stem, 8000)
+head(freq, 10)
+```
+
+Copiamo i dataframe che ci possono esser utili nell'analisi del dizionario per correggere lessicalmente le parole errate e rimuoviamo tutti gli oggetti che abbiamo utilizzato. 
+
+```{r clean-env-textstat}
+tidy_doge_com <- com_clean_tidy
+tidy_doge_post <- post_clean_tidy
+
 #remove(data)
 remove(com_doge)
 remove(post_doge)
+
 remove(com_clean_tidy)
 remove(post_clean_tidy)
+
 remove(com_clean_dfm)
 remove(post_clean_dfm)
+
+remove(com_clean_tidy_stem)
+remove(post_clean_tidy_stem)
+
+remove(post_clean_dfm_stem)
+remove(com_clean_dfm_stem)
+
+remove(freq)
+remove(tfidf)
 ```
 
+### Tokenization of Bigrams
 
-```{r doge-bigrams-stat}
+```{r bigrams-stat}
 com_doge <- corpus.tokenize_dfmTidy(data$corpus_comm, ngrams = 2)
-
 print("REDDIT's COMMENT CORPUS: ")
 print(com_doge$dfm)
 post_doge <- corpus.tokenize_dfmTidy(data$corpus_post, ngrams = 2)
@@ -1013,7 +1156,7 @@ print("REDDIT's POST CORPUS: ")
 print(post_doge$dfm)
 ```
 
-```{r}
+```{r bigrams-clean-txtstat}
 com_clean_tidy <- corpus.clean_tidy(com_doge$tidy, ngrams = 2)
 post_clean_tidy <- corpus.clean_tidy(post_doge$tidy, ngrams = 2)
 
@@ -1028,36 +1171,329 @@ post_clean_bigram_dfm <- post_clean_tidy %>%
 print(post_clean_bigram_dfm)
 ```
 
+Tabella di contingenza prima di aver applicato la correzione del dizionario: 
 
 |      DogeCoin Corpus | Type  | # Comment | # Post *  |
 | -------------------: | ----- | --------- | --------- |
-|         #num of docs | Raw   | 439,054   | 14,252    |
-|                      | Clean | 419,718   | 14,251    |
-|            # of toks | Raw   | 77,567    | 68,820    |
-|                      | Clean | 59,551    | 53,202    |
+|         #num of docs | Raw   | 439,054   |     |
+|                      | Clean | 419,718   |    |
+|         #num of toks | Raw   | 77,567    |    |
+|                      | Clean | 59,551    |     |
 |     # hunspell check | TRUE  | 23,908    | 22,605    |
-|                      | FALSE | 35,643    | 30597     |
+|                      | FALSE | 35,643    | 30,597    |
+|                      |       |           |           |
+|  #num of stem toks   | Clean | 44,315    |   44,329  |
 |                      |       |           |           |
 | #num of docs bigrams | Raw   | 439,054   | 14,252    |
 |                      | Clean | 358,989   | 14,247    |
-|    # of toks bigrams | Raw   | 1,175,788 | 1,174,517 |
+| #num of toks bigrams | Raw   | 1,175,788 | 1,174,517 |
 |                      | Clean | 1,055,811 | 1,044,181 |
 
-*post have a minimum of 5 comments.
+* with stop words
 
 #### Analize uncorrect Words
 
-```{r}
+Come si è potuto vedere dalla precedente tabella, il numero di parole classificate come lessicalmente non corrette è maggiore della metà del dataset. Si è provato quindi a recuperare almeno le parole maggiormente influenti nel dataset.
 
-correct_com
-correct_post
+Sono state utilizzate le funzioni della libreria _hunspell_, che permette di verificare se una parola risulta corretta o meno, rispetto il loro dizionario , oppure di individuare una lista di suggerimenti per la correzione. 
 
+
+```{r spell-checking-words}
+# tidy doge comment is 
+# compute correct word and stats 
+correct_com <- tidy_doge_com %>%
+   mutate(check = hunspell_check(words)) 
+
+# aggregate coun for words,docs
+correct_post <- tidy_doge_post %>%
+   mutate(check = hunspell_check(words)) 
    
+
+print(summary(correct_com))
+print(summary(correct_post))
 ```
 
-#### Words manipulation for sentiment
 
-Per scegliere la tecnica da utilizzare tra la lemmatizazzione e lo stemming, si è scelto di vedere l'impatto sul numero di parole escluse dai dizionari. 
+
+```{r def-spell-checking}
+words.spell_checking <- function(data){
+   # counts word
+   com_counts <- corpus.countPlot_tidy(correct_post, bool_plot_count = FALSE, 
+                                                bool_plot_frequency = FALSE)
+   
+   # check words
+   com_correct <- com_counts %>%
+       mutate.(check = hunspell_check(words)) 
+   
+   print(paste0("RAW WORDS: ", dim(com_correct)[1], sep = " "))
+   
+   # aggregate for words
+   correct_unique <- aggregate(count ~ words+check, data=com_correct, FUN=sum)
+   
+   # extract correct 
+   correct <- correct_unique %>%
+      filter(check == TRUE) 
+   
+   print(paste0("CORRECTS WORDS: ", dim(correct)[1], sep = " "))
+   
+   
+   # extract uncorrect 
+   uncorrect <- com_correct %>%
+      filter(check == FALSE) 
+     
+      
+   print(paste0("UNCORRECTS WORDS: ", dim(uncorrect)[1], sep = " "))
+   
+   return(list(correct=correct, uncorrect=uncorrect))
+}
+
+```
+
+```{r perform-check-spelling}
+# spell checking add counts and freq.
+df <- words.spell_checking(correct_post)
+correct_post <- df$correct
+uncorrect_post <- df$uncorrect
+
+remove(df)
+```
+
+
+Una volta estratte le parole riconosciute come corrette e divise da quelle non corrette possiamo procedere l'analisi delle seconde. 
+
+```{r build-uncorrect-df}
+
+uncorrect_stem_lem <- uncorrect_post %>%
+   cbind(term_stem = uncorrect_post$words) %>%
+   cbind(term_lem = uncorrect_post$words) %>%
+   word.manipulation(term_stem, mode = 2) %>%
+   word.manipulation(term_lem, mode = 1) %>%
+   rename(term = words)
+
+dim(uncorrect_stem_lem)
+summary(uncorrect_stem_lem)
+```
+
+
+Siamo arrivati a creare un dataframe contente la parola originale estratta dal dataset, la sua lemmatizzazione e stemming. In questo modo nei passi successivi andremo ad aggiungere delle features riguardanti le distanza tra le diverse stringe inserite nel dataframe, così che si possa analizzare la bontà della correzione da parte della funzione di hunspell. 
+
+Si è utilizzata la distanza di levenst.....
+
+
+```{r suggest-words}
+
+correct_spelling <- function(data, input) {
+   data %>%
+      mutate( suggest = 
+             case_when(
+               # any manual corrections
+               {{input}} == 'aways' ~ 'away',
+               {{input}} == 'covid' ~ 'covid',
+               {{input}} == 'binance' ~ 'binance',
+               {{input}} == 'stonks' ~ 'stonks',
+               {{input}} == 'cryptocurrency' ~ 'cryptocurrency',
+               {{input}} == 'cryptocurrencies' ~ 'cryptocurrency',
+               # check and (if required) correct spelling
+               !hunspell_check({{input}}) ~
+                  hunspell_suggest({{input}}) %>%
+                  # get first suggestion, or NA if suggestions list is empty
+                  map(1, .default = NA) %>%
+                  unlist() %>%
+                  tolower(),
+               TRUE ~ {{input}} # if word is correct
+            ))
+            # if input incorrectly spelled but no suggestions, return input word
+           # ifelse(is.na(output), {{input}}, output)
+}
+
+# apply suggest
+suggest_stem_corFalse <- uncorrect_stem_lem %>%
+   correct_spelling(term) %>%
+   mutate(dist_term = stringdist::stringdist(term, suggest, "lv")) %>%
+   mutate(dist_stem = stringdist::stringdist(term_stem, suggest, "lv")) %>%
+   mutate(dist_source_stem = stringdist::stringdist(term, term_stem, "lv")) %>%
+   mutate(dist_lem = stringdist::stringdist(term_lem, suggest, "lv")) %>%
+   select(count, term, suggest, term_stem, term_lem, dist_lem, dist_source_stem)
+
+write_rds(suggest_stem_corFalse, "../Data/doge_suggest.rds")
+remove(suggest_stem_corFalse)
+remove(uncorrect_stem_lem)
+remove(uncorrect_post)
+remove(correct_post)
+
+```
+
+Abbiamo salvato per precauzione il file essendo che il processo, più volte ripeturo, di calcolo delle distanza può richiedere abbastanza tempo per grandi dataset. 
+
+Possiamo adesso effettuare una correzione più raffinata delle parole. Nel prossimo codice ci riferiremo con '_large dictionary_' il dizionario che contiene le parole con i conteggi più altri e con '_medium_' la fascia di mezzo, i loro nomi non rispecchiano quindi le dimensioni del dataset. 
+
+La correzione è stata effettuata con i seguenti passi: 
+- flag
+- if flag term_stem else suggest
+- for stopwords used suggest
+- if dist lev from source and stem word is 0 take stem # sigle o parole corte/non modificabili 
+
+```{r dic_correction}
+dic_suggest = readRDS("./doge_suggest.rds")
+
+
+#  ????????
+#  holddddd         holddddd
+#  buyyyy           buyyyy
+little_correction <- function(input){
+   output <- case_when(
+      input == 'hodl' ~ 'hold',
+      input == 'obis' ~ 'boys', 
+      input == 'fuckin' ~ 'fucking', 
+      input == 'ios' ~ 'ios', 
+      input == 'gpu' ~ 'gpu', 
+      input == 'gme' ~ 'gme',
+      input == 'font' ~ 'dont',
+      input == 'stonks' ~ 'stonks',
+      grepl("^go*", input) ~ 'go',
+      grepl("^usa", input) ~ 'usa',
+      TRUE ~ input
+   )
+   ifelse(is.na(output), input, output)
+}
+
+## stop words from snowball
+stopwords <- get_stopwords(language = "en", source = "snowball")
+stopwords_ <- as.vector(stopwords$word)
+remove(stopwords)
+
+# augmented stopwords
+other <- purrr::keep(stopwords_, function(x) grepl("['-]+", x))
+other1 <- gsub("[[:punct:]]", "", other) 
+other2 <- unique( gsub("[[:punct:]][a-z]+", "", other) )
+
+stopwords <- c(stopwords_, other1, other2)
+remove(other, other1, other2)
+
+dim <- dim(dic_suggest)[1]
+```
+
+```{r large-dictionary}
+# dic with influence uncorret words 
+dic_l.tdb <- tidytable(dic_suggest) %>%
+      filter(count >= 500 ) %>%
+      cbind(flag = -1) %>%
+      cbind(correction = 'none') %>%
+      select.(count, term, term_stem, term_lem, suggest, flag, correction, dist_source_stem) 
+   
+# flag if a word is in stopwords vec
+dic_l.tdb$flag = ifelse.(dic_l.tdb$term_stem %in% stopwords, 1, 0)
+
+# if is a stopwords, use suggested words
+dic_l.tdb$correction = ifelse.(dic_l.tdb$flag == 1, dic_l.tdb$suggest, dic_l.tdb$term_stem)
+
+# if lev dist from raw string and stem. string is 0 ..
+dic_l.tdb$correction = ifelse.(dic_l.tdb$dist_source_stem == 0 & 
+                                  dic_l.tdb$flag != 1, 
+                                      dic_l.tdb$term, dic_l.tdb$suggest)
+
+print("stop words founded")
+print(sum(dic_l.tdb$flag))
+print("nrow large dictionary")
+print(nrow(dic_l.tdb))
+
+print("in %")
+print(sum(dic_l.tdb$flag)/ nrow(dic_l.tdb) * 100 )
+```
+
+```{r large-dictionary-2}
+
+dic_l <- dic_l.tdb %>%
+      mutate.( correction = little_correction(correction) ) %>%
+      select.(count, term, correction, flag) %>%
+      mutate.(check = hunspell_check(correction)) %>%
+      group_by(flag) %>%
+      arrange.(desc(count))
+
+print("Percent of dic_large's correct words over dic_large's dim")
+print(nrow( dic_l[ check == TRUE] ))
+print("Percent of dic_large's correct words over total dim")
+print(nrow( dic_l[ term != correction] ) / nrow(dic_l) * 100)
+
+```
+
+Si eseguono le medesime operazioni con le parole che hanno una frequenza compresa tra 100 e 500 esclusi. Ci si aspetta di trovare un minor numero di stop words, ma l'obiettivo è tentare di correggere se possibile, se no stemmizzare la parola. 
+
+Un problema che non è stato risolto con questa correzione è quello dovuto a caratteri battuti come doppi all'interno delle parole, o comunque risolvere le occorrenze strane all'interno delle parole. Queste verranno escluse dall'analisi del testo, ma non potranno esser utilizzate nei conteggi delle parole, risultando inutili a livello di informazione che portano. 
+
+```{r medium-dictionary}
+
+# merge with dic of true word
+dic_m.tdb <- tidytable(dic_suggest) %>%
+   filter.( count > 100 & count < 500 ) %>%
+   cbind(flag = -1) %>%
+   cbind(correction = 'none') %>%
+   select.(count, term, term_stem, term_lem, suggest, flag, correction, dist_source_stem) 
+   
+# flag if a word is in stopwords vec
+dic_m.tdb$flag = ifelse.(dic_m.tdb$term_stem %in% stopwords, 1, 0)
+
+# if is a stopwords, use suggested words
+dic_m.tdb$correction = ifelse.(dic_m.tdb$flag == 1, dic_m.tdb$suggest, dic_m.tdb$term_stem)
+
+# if lev dist from raw string and stem. string is 0 ..
+dic_m.tdb$correction = ifelse.(dic_m.tdb$dist_source_stem == 0 & 
+                                  dic_m.tdb$flag != 1, 
+                                      dic_m.tdb$term, dic_m.tdb$suggest)
+print("stop words founded")
+print(sum(dic_m.tdb$flag))
+print("nrow medium dictionary")
+print(nrow(dic_m.tdb))
+
+print("in %")
+print(sum(dic_m.tdb$flag)/ nrow(dic_m.tdb) * 100 )
+```
+
+```{r medium-dictionary-2}
+
+dic_m <- dic_m.tdb %>%
+      mutate( correction = little_correction(correction) ) %>%
+      select(count, term, correction, flag) %>%
+      mutate.(check = hunspell_check(correction)) %>%
+      group_by(flag) %>%
+      arrange(desc(count))
+
+head(dic_m, 10)
+
+```
+
+
+```{r build-dictionary}
+
+dictionary = bind_rows(
+   dic_l %>% select.(term, correction), 
+   dic_m %>% select.(term, correction)
+   )
+
+write_rds(dictionary, "../Data/dictionary.rds")
+
+```
+
+```{r}
+remove(dictionary)
+remove(dic_l)
+remove(dic_m)
+remove(dic_m.tdb)
+remove(dic_l.tdb)
+remove(dic_suggest)
+
+```
+
+
+## Remake Corpus 
+
+ - a cosa mi potrebbe servire 
+ - lo stemming mi potrebbe esser utile? 
+ - misure di distanze? **lev e poi? 
+
+### Words manipulation for sentiment
+
+Facciamo un'osservazione sul numero di parole che si andranno ad utilizzare per l'analisi dei sentimenti. Lemmatizazzione e stemming, sono le due tecniche per operare su
 
 ```{r doge-unigrams-manipulation, result='hide'}
 
@@ -1066,7 +1502,7 @@ data <- readRDS("../Data/dogecoin.rds")
 
  lab.dizCompare<- function(.data){
    
-   raw_data <- corpus.tokenize_dfmTidy(.data)
+   raw_data <- corpus.tokenize_dfmTidy(.data, stop=FALSE)
    # tokenize data and take tidy df
    tidy <- raw_data$tidy
 
@@ -1118,8 +1554,11 @@ data <- readRDS("../Data/dogecoin.rds")
 
 
 ```{r warining=FALSE }
-df <- data$corpus_comm
+df <- data$corpus_post
 lab.dizCompare(df)
+
+remove(df)
+remove(data)
 ```
 
 
@@ -1175,16 +1614,13 @@ dfm(post)
 # [979] "aggressiveness"                                                           
 # [980] "aggresssiivvveeellly"  
 
-## confrontare il numero di parole estratte 
-## con le parole utilizzate nel sentiment
-
 ```
 
 
+## Bigrams Analysis
 
 
 ```{r, crop=TRUE}
-remove(data)
 
 data <- readRDS("../Data/dogecoin.rds")
 doge_corpus <- data$corpus_comm

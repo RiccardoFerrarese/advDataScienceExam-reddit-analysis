@@ -24,3 +24,7 @@ Project/.RDataTmp
 Project/Report/dogecoin
 
 Project/Report/note_cache/
+
+*.csv
+
+*.rds
