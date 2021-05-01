@@ -1,0 +1,400 @@
+---
+   title: "Analysis of topics about cryptocurrencies on Reddit"
+author: "Riccardo Ferrarese"
+date: "19/3/2021"
+output: pdf_document
+
+---
+   
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE, 
+                      python.reticulate=FALSE, 
+                      echo = TRUE, 
+                      warning = FALSE, 
+                      cache = TRUE, 
+                      message = FALSE, 
+                      results = 'hide', 
+                      out.width = "80%"
+)
+knitr::knit_hooks$set(crop = knitr::hook_pdfcrop) 
+```
+   
+
+```{r doge-trigrams, time_it=TRUE}
+doge_tidy_trigrams <- create_tidy_corpus(corpus_doge, ngrams=3)
+doge_clean_tidy_trigrams <- compute_clean_corpus_tidy(doge_tidy_trigrams, ngrams = 3, lemma = FALSE, stemming = TRUE)
+doge_trigrams_counts <- compute_plot_count_and_freq(doge_clean_tidy_trigrams, 
+                                                    threshold_freq = 0.00001,
+                                                    bool_plot_count = FALSE,
+                                                    bool_plot_frequency  = FALSE,
+                                                    ngrams = 3)
+```
+
+```{r doge-trigrams-sentiment, time_it=TRUE}
+plot_class_sentiment(doge_trigrams_counts, n_filter_sentiment = 450, ngrams = 3)
+```
+
+```{r doge-trigrams-word-sentiment, time_it=TRUE}
+plot_word_per_sentiment(doge_trigrams_counts, n_filter = 2, ngrams = 3)
+```
+
+```{r doge-net-trigrams}
+word_network(doge_trigrams_counts, n_filter=400)
+```
+
+```{r}
+remove(doge_tidy_trigrams)
+remove(doge_clean_tidy_trigrams)
+remove(doge_trigrams_counts)
+```
+
+
+```{r echo=FALSE}
+remove(corpus_doge)
+remove(doge_txt)
+
+remove(bigrams_class_sentiment)
+remove(bigrams_sentiment)
+```
+
+
+### Ethereum's Subreddit
+
+```{r}
+
+if(!(exists('eth_com_raw_data'))){
+   eth_com_raw_data <- read.csv("../../data/eth_com.csv")
+}
+
+data <- create_corpus_from_rawdata(eth_com_raw_data)
+remove(eth_com_raw_data)
+
+corpus_eth <- data$corpus
+eth_txt <- data$df
+
+head(corpus_eth, 2)
+head(eth_txt, 2)
+
+```
+
+```{r eth-unigrams}
+eth_tidy <- create_tidy_corpus(corpus_eth)
+eth_clean_tidy <- compute_clean_corpus_tidy(eth_tidy, lemma = FALSE, stemming = TRUE)
+eth_word_counts <- compute_plot_count_and_freq(eth_clean_tidy, threshold_count = 20)
+
+```
+
+```{r eth-unigrams-sentiment}
+plot_class_sentiment(eth_word_counts)
+```
+
+```{r eth-word-sentiment}
+plot_word_per_sentiment(eth_word_counts, n_filter=2)
+```
+
+```{r echo=FALSE}
+remove(eth_tidy)
+remove(eth_clean_tidy)
+remove(eth_word_counts)
+```
+
+
+```{r eth-bigrams}
+eth_tidy_bigrams <- create_tidy_corpus(corpus_eth, ngrams=2)
+eth_clean_tidy_bigrams <- compute_clean_corpus_tidy(eth_tidy_bigrams, ngrams = 2, lemma = FALSE, stemming = TRUE)
+eth_bigrams_counts <- compute_plot_count_and_freq(eth_clean_tidy_bigrams, 
+                                                  threshold_freq = 0.0005,
+                                                  threshold_count = 5, 
+                                                  ngrams = 2)
+```
+
+```{r eth-bigrams-sentiment}
+eth_bigrams_class_sentiment <- plot_class_sentiment(eth_bigrams_counts, n_filter_sentiment = 10, ngrams = 2)
+```
+
+
+```{r eth-bigrams-word-sentiment}
+# eth_bigrams_sentiment <- plot_word_per_sentiment(eth_bigrams_counts, n_filter = 0, ngrams = 2)
+```
+
+
+```{r eth-net-bigrams}
+word_network(eth_bigrams_counts, n_filter=3)
+```
+
+```{r}
+remove(eth_tidy_bigrams)
+remove(eth_clean_tidy_bigrams)
+remove(eth_bigrams_counts)
+```
+
+
+
+```{r eth-trigrams, time_it=TRUE}
+eth_tidy_trigrams <- create_tidy_corpus(corpus_eth, ngrams=3)
+eth_clean_tidy_trigrams <- compute_clean_corpus_tidy(eth_tidy_trigrams, ngrams = 3, lemma = FALSE, stemming = TRUE)
+eth_trigrams_counts <- compute_plot_count_and_freq(eth_clean_tidy_trigrams, 
+                                                   threshold_freq = 0.00001,
+                                                   bool_plot_count = FALSE,
+                                                   bool_plot_frequency  = FALSE,
+                                                   ngrams = 3)
+```
+
+```{r eth-trigrams-sentiment, time_it=TRUE}
+plot_class_sentiment(eth_trigrams_counts, n_filter_sentiment = 2, ngrams = 3)
+```
+
+```{r eth-trigrams-word-sentiment, time_it=TRUE}
+# plot_word_per_sentiment(eth_trigrams_counts, n_filter = 0, ngrams = 3)
+```
+
+```{r eth-net-trigrams}
+word_network(eth_trigrams_counts, n_filter=2)
+```
+
+```{r}
+remove(eth_tidy_trigrams)
+remove(eth_clean_tidy_trigrams)
+remove(eth_trigrams_counts)
+```
+
+
+```{r echo=FALSE}
+remove(corpus_eth)
+remove(eth_txt)
+
+remove(eth_bigrams_class_sentiment)
+remove(eth_bigrams_sentiment)
+```
+
+
+### Bitcoin's Subreddit 
+
+```{r}
+
+if(!(exists('btc_com_raw_data'))){
+   btc_com_raw_data <- read.csv("../../data/btc_com.csv")
+}
+
+data <- create_corpus_from_rawdata(btc_com_raw_data)
+remove(btc_com_raw_data)
+
+corpus_btc <- data$corpus
+btc_txt <- data$df
+
+head(corpus_btc, 2)
+head(btc_txt, 2)
+
+```
+
+```{r btc-unigrams}
+btc_tidy <- create_tidy_corpus(corpus_btc)
+btc_clean_tidy <- compute_clean_corpus_tidy(btc_tidy, lemma = FALSE, stemming = TRUE)
+btc_word_counts <- compute_plot_count_and_freq(btc_clean_tidy, threshold_count = 1000)
+
+```
+
+```{r btc-unigrams-sentiment}
+plot_class_sentiment(btc_word_counts)
+```
+
+```{r btc-word-sentiment}
+plot_word_per_sentiment(btc_word_counts, n_filter=2)
+```
+
+```{r echo=FALSE}
+remove(btc_tidy)
+remove(btc_clean_tidy)
+remove(btc_word_counts)
+```
+
+
+```{r btc-bigrams}
+btc_tidy_bigrams <- create_tidy_corpus(corpus_btc, ngrams=2)
+btc_clean_tidy_bigrams <- compute_clean_corpus_tidy(btc_tidy_bigrams, ngrams = 2, lemma = FALSE, stemming = TRUE)
+btc_bigrams_counts <- compute_plot_count_and_freq(btc_clean_tidy_bigrams, 
+                                                  threshold_freq = 0.0001,
+                                                  threshold_count = 500, 
+                                                  ngrams = 2)
+```
+
+```{r btc-bigrams-sentiment}
+btc_bigrams_class_sentiment <- plot_class_sentiment(btc_bigrams_counts, n_filter_sentiment = 5000, ngrams = 2)
+```
+
+
+```{r btc-bigrams-word-sentiment}
+btc_bigrams_sentiment <- plot_word_per_sentiment(btc_bigrams_counts, n_filter = 10, ngrams = 2)
+```
+
+
+```{r btc-net- bigrams}
+word_network(btc_bigrams_counts, n_filter=1000)
+```
+
+```{r}
+remove(btc_tidy_bigrams)
+remove(btc_clean_tidy_bigrams)
+remove(btc_bigrams_counts)
+```
+
+
+
+```{r btc-trigrams, time_it=TRUE}
+btc_tidy_trigrams <- create_tidy_corpus(corpus_btc, ngrams=3)
+btc_clean_tidy_trigrams <- compute_clean_corpus_tidy(btc_tidy_trigrams, ngrams = 3, lemma = FALSE, stemming = TRUE)
+btc_trigrams_counts <- compute_plot_count_and_freq(btc_clean_tidy_trigrams, 
+                                                   threshold_freq = 0.00001,
+                                                   bool_plot_count = FALSE,
+                                                   bool_plot_frequency  = FALSE,
+                                                   ngrams = 3)
+```
+
+```{r btc-trigrams-sentiment, time_it=TRUE}
+plot_class_sentiment(btc_trigrams_counts, n_filter_sentiment = 1250, ngrams = 3)
+```
+
+```{r btc-trigrams-word-sentiment, time_it=TRUE}
+plot_word_per_sentiment(btc_trigrams_counts, n_filter = 3, ngrams = 3)
+```
+
+```{r btc-net-trigrams}
+#word_network(btc_trigrams_counts, n_filter=10)
+```
+
+```{r}
+remove(btc_tidy_trigrams)
+remove(btc_clean_tidy_trigrams)
+remove(btc_trigrams_counts)
+```
+
+
+```{r echo=FALSE}
+remove(corpus_btc)
+remove(btc_txt)
+
+remove(btc_bigrams_class_sentiment)
+remove(btc_bigrams_sentiment)
+```
+
+
+### PancakeSwap's Subreddit
+
+```{r}
+
+if(!(exists('pancake_com_raw_data'))){
+   pnc_com_raw_data <- read.csv("../../data/pancakeswap_com.csv")
+}
+
+data <- create_corpus_from_rawdata(pnc_com_raw_data)
+remove(pnc_com_raw_data)
+
+corpus_pnc <- data$corpus
+pnc_txt <- data$df
+
+head(corpus_pnc, 2)
+head(pnc_txt, 2)
+
+```
+
+```{r pnc-unigrams}
+pnc_tidy <- create_tidy_corpus(corpus_pnc)
+pnc_clean_tidy <- compute_clean_corpus_tidy(pnc_tidy, lemma = FALSE, stemming = TRUE)
+pnc_word_counts <- compute_plot_count_and_freq(pnc_clean_tidy, threshold_count = 5)
+
+```
+
+```{r pnc-unigrams-sentiment}
+plot_class_sentiment(pnc_word_counts)
+```
+
+```{r pnc-word-sentiment}
+plot_word_per_sentiment(pnc_word_counts, n_filter=0)
+```
+
+```{r echo=FALSE}
+remove(pnc_tidy)
+remove(pnc_clean_tidy)
+remove(pnc_word_counts)
+```
+
+
+```{r pnc-bigrams}
+pnc_tidy_bigrams <- create_tidy_corpus(corpus_pnc, ngrams=2)
+pnc_clean_tidy_bigrams <- compute_clean_corpus_tidy(pnc_tidy_bigrams, ngrams = 2, lemma = FALSE, stemming = TRUE)
+pnc_bigrams_counts <- compute_plot_count_and_freq(pnc_clean_tidy_bigrams, 
+                                                  threshold_freq = 0.002,
+                                                  threshold_count = 2, 
+                                                  ngrams = 2)
+```
+
+```{r pnc-bigrams-sentiment}
+eth_bigrams_class_sentiment <- plot_class_sentiment(pnc_bigrams_counts, n_filter_sentiment = 1, ngrams = 2)
+```
+
+
+```{r pnc-bigrams-word-sentiment}
+#pnc_bigrams_sentiment <- plot_word_per_sentiment(pnc_bigrams_counts, n_filter = 0, ngrams = 2)
+```
+
+
+```{r pnc-net-bigrams}
+word_network(pnc_bigrams_counts, n_filter=2)
+```
+
+```{r}
+remove(pnc_tidy_bigrams)
+remove(pnc_clean_tidy_bigrams)
+remove(pnc_bigrams_counts)
+```
+
+
+
+```{r pnc-trigrams, time_it=TRUE}
+# troppi pochi dati 
+pnc_tidy_trigrams <- create_tidy_corpus(corpus_pnc, ngrams=3)
+pnc_clean_tidy_trigrams <- compute_clean_corpus_tidy(pnc_tidy_trigrams, ngrams = 3, lemma = FALSE, stemming = TRUE)
+pnc_trigrams_counts <- compute_plot_count_and_freq(pnc_clean_tidy_trigrams, 
+                                                   bool_plot_count = FALSE,
+                                                   bool_plot_frequency  = FALSE,
+                                                   ngrams = 3)
+```
+
+```{r pnc-trigrams-sentiment, time_it=TRUE}
+# plot_class_sentiment(pnc_trigrams_counts, n_filter_sentiment = 0, ngrams = 3)
+```
+
+```{r pnc-trigrams-word-sentiment, time_it=TRUE}
+# plot_word_per_sentiment(pnc_trigrams_counts, n_filter = 0, ngrams = 3)
+```
+
+```{r pnc-net-trigrams}
+word_network(pnc_trigrams_counts, n_filter=1)
+```
+
+```{r}
+remove(pnc_tidy_trigrams)
+remove(pnc_clean_tidy_trigrams)
+remove(pnc_trigrams_counts)
+```
+
+
+```{r echo=FALSE}
+remove(corpus_pnc)
+remove(pnc_txt)
+
+remove(pnc_bigrams_class_sentiment)
+remove(pnc_bigrams_sentiment)
+```
+
+## Network Analysis 
+
+
+## Results
+
+## Conclusion 
+
+## References
+
+
+
