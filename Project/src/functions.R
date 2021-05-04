@@ -1,4 +1,4 @@
-source("./lib.R")
+source("./src/lib.R")
 
 dfm.frequency <- function(.dfm, n = 50){
    

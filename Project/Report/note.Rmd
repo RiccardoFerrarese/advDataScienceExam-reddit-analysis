@@ -18,11 +18,13 @@ knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE,
                       echo = TRUE, 
                       warning = FALSE, 
                       cache = TRUE, 
-                      message = FALSE, 
-                      results = 'hide', 
-                      out.width = "60%"
+                      message = FALSE,
+                      out.width = "60%", 
+                      fig.align="center"
                       )
 knitr::knit_hooks$set(crop = knitr::hook_pdfcrop) 
+knitr::knit_hooks$set(optipng = knitr::hook_optipng)
+hook_output <- knitr::knit_hooks$get("output")
 
 # bib <- "../bibliography.bib"
 ```
@@ -342,13 +344,8 @@ Una funzione motlo utile messa a disposizione dal pacchetto è quella per calcol
 Potrebbe però esser utile per comparare l'insieme totale di commenti di un subreddit con il contenuto presente negli altri. 
 
 
-```{r dfm-txt-stat, reslut= 'hide'}
+```{r dfm-txt-stat-def}
 
-data <- readRDS("./doge_suggest.rds" )
-data <- data[1:400, ]
-typeof(data)
-
-dfm <- dfm(data)
 dfm.frequency <- function(.dfm, n = 50){
    
    features_dfm <- textstat_frequency(.dfm, n)
@@ -983,7 +980,7 @@ if(!(exists('doge_com_raw_data'))){
 # create and save data (df + corpus)
 data <- df.create(doge_com_raw_data, "Data", "dogecoin", filter_post = 0)
 remove(doge_com_raw_data)
-
+write_rds(data, "../Data/dogecoin.rds")
 ```
 
 
@@ -1005,11 +1002,13 @@ print(com_doge$dfm)
 post_doge <- corpus.tokenize_dfmTidy(data$corpus_post,stop = FALSE)
 print("REDDIT's POST CORPUS: ")
 print(post_doge$dfm)
+
+remove(data)
 ```
 
 ```{r}
 print("stop words removed:")
-77739 - 77567 
+198709 - 198537
 ```
 
 
@@ -1039,19 +1038,17 @@ com_clean_tidy <- corpus.clean_tidy(com_doge$tidy, mode = "none")
 post_clean_tidy <- corpus.clean_tidy(post_doge$tidy, mode = "none")
 
 
-print("CLEAN COMMENT CORPUS: ")
+#print("CLEAN COMMENT CORPUS: ")
 com_clean_dfm <- com_clean_tidy %>%
    cast_dfm(document, words, count)
 #print(com_clean_dfm)
 
-print("CLEAN POST CORPUS: ")
+#print("CLEAN POST CORPUS: ")
 post_clean_dfm <- post_clean_tidy %>%
    cast_dfm(document, words, count)
 #print(post_clean_dfm)
-```
 
 
-```{r}
 print("CLEAN COMMENT CORPUS DIM (docsxtoks): ")
 print(dim(com_clean_dfm))
 print("CLEAN POST CORPUS DIM: (docsxtoks)")
@@ -1167,8 +1164,7 @@ print(com_clean_bigram_dfm)
 
 print("CLEAN POST CORPUS: ")
 post_clean_bigram_dfm <- post_clean_tidy %>%
-   cast_dfm(document, words, count)
-print(post_clean_bigram_dfm)
+   cast_dfm(document, words, count)print(post_clean_bigram_dfm)
 ```
 
 Tabella di contingenza prima di aver applicato la correzione del dizionario: 
@@ -1213,6 +1209,7 @@ print(summary(correct_com))
 print(summary(correct_post))
 ```
 
+Lavoriamo con il dataset dei post, essendo i token provenienti dalla stessa sorgente, in modo tale da lavorare sui dati che potrebbero servire per la topic analysis. Inoltre l'obiettivo principale è correggere le parole più influenti che sono le medesime in entrambi i corpus.
 
 
 ```{r def-spell-checking}
@@ -1234,7 +1231,9 @@ words.spell_checking <- function(data){
    correct <- correct_unique %>%
       filter(check == TRUE) 
    
-   print(paste0("CORRECTS WORDS: ", dim(correct)[1], sep = " "))
+   print(paste0("CORRECTS WORDS: ", dim(correct)[1],  "   ", 
+                round((dim(correct)[1]/dim(correct_unique)[1])*100, 2),
+                "%", sep = " "))
    
    
    # extract uncorrect 
@@ -1242,7 +1241,9 @@ words.spell_checking <- function(data){
       filter(check == FALSE) 
      
       
-   print(paste0("UNCORRECTS WORDS: ", dim(uncorrect)[1], sep = " "))
+   print(paste0("UNCORRECTS WORDS: ", dim(uncorrect)[1], "   ",  
+                round(dim(uncorrect)[1]/dim(correct_unique)[1]*100, 2),
+                "%", sep = " "))
    
    return(list(correct=correct, uncorrect=uncorrect))
 }
@@ -1258,7 +1259,7 @@ uncorrect_post <- df$uncorrect
 remove(df)
 ```
 
-
+Possiamo notare come il numero di parole grammaticalmente scorrete sono molto maggiori rispetto a quelle corretter
 Una volta estratte le parole riconosciute come corrette e divise da quelle non corrette possiamo procedere l'analisi delle seconde. 
 
 ```{r build-uncorrect-df}
@@ -1282,7 +1283,7 @@ Si è utilizzata la distanza di levenst.....
 
 ```{r suggest-words}
 
-correct_spelling <- function(data, input) {
+words.spell_checking <- function(data, input) {
    data %>%
       mutate( suggest = 
              case_when(
@@ -1293,6 +1294,22 @@ correct_spelling <- function(data, input) {
                {{input}} == 'stonks' ~ 'stonks',
                {{input}} == 'cryptocurrency' ~ 'cryptocurrency',
                {{input}} == 'cryptocurrencies' ~ 'cryptocurrency',
+               
+               {{input}} == "didn" ~ "did not", 
+               {{input}} == "doesn" ~ "does not", 
+               {{input}} == "aren" ~ "are not", 
+               {{input}} == "isn" ~ "is not", 
+               {{input}} == "isnt" ~ "is not",
+               {{input}} == "wasn" ~ "was not", 
+               {{input}} == "weren" ~ "were not", 
+               {{input}} == "couldn" ~ "could not",
+               {{input}} == "wasnt" ~ "was not", 
+               {{input}} == "wouldn" ~ "would not", 
+               {{input}} == "wouldnt" ~ "would not",
+               
+               {{input}} == "ive" ~ "i have",
+               {{input}} == "youre" ~ "you are",
+               
                # check and (if required) correct spelling
                !hunspell_check({{input}}) ~
                   hunspell_suggest({{input}}) %>%
@@ -1308,12 +1325,12 @@ correct_spelling <- function(data, input) {
 
 # apply suggest
 suggest_stem_corFalse <- uncorrect_stem_lem %>%
-   correct_spelling(term) %>%
+   words.spell_checking(term) %>%
    mutate(dist_term = stringdist::stringdist(term, suggest, "lv")) %>%
    mutate(dist_stem = stringdist::stringdist(term_stem, suggest, "lv")) %>%
    mutate(dist_source_stem = stringdist::stringdist(term, term_stem, "lv")) %>%
    mutate(dist_lem = stringdist::stringdist(term_lem, suggest, "lv")) %>%
-   select(count, term, suggest, term_stem, term_lem, dist_lem, dist_source_stem)
+   select(count, term, suggest, term_stem, term_lem, dist_term, dist_source_stem)
 
 write_rds(suggest_stem_corFalse, "../Data/doge_suggest.rds")
 remove(suggest_stem_corFalse)
@@ -1322,8 +1339,6 @@ remove(uncorrect_post)
 remove(correct_post)
 
 ```
-
-Abbiamo salvato per precauzione il file essendo che il processo, più volte ripeturo, di calcolo delle distanza può richiedere abbastanza tempo per grandi dataset. 
 
 Possiamo adesso effettuare una correzione più raffinata delle parole. Nel prossimo codice ci riferiremo con '_large dictionary_' il dizionario che contiene le parole con i conteggi più altri e con '_medium_' la fascia di mezzo, i loro nomi non rispecchiano quindi le dimensioni del dataset. 
 
@@ -1334,13 +1349,13 @@ La correzione è stata effettuata con i seguenti passi:
 - if dist lev from source and stem word is 0 take stem # sigle o parole corte/non modificabili 
 
 ```{r dic_correction}
-dic_suggest = readRDS("./doge_suggest.rds")
+dic_suggest = readRDS("../Data/doge_suggest.rds")
 
 
 #  ????????
 #  holddddd         holddddd
 #  buyyyy           buyyyy
-little_correction <- function(input){
+word.little_correction <- function(input){
    output <- case_when(
       input == 'hodl' ~ 'hold',
       input == 'obis' ~ 'boys', 
@@ -1357,15 +1372,18 @@ little_correction <- function(input){
    ifelse(is.na(output), input, output)
 }
 
+
 ## stop words from snowball
 stopwords <- get_stopwords(language = "en", source = "snowball")
 stopwords_ <- as.vector(stopwords$word)
 remove(stopwords)
 
 # augmented stopwords
+# take words whit ' 
 other <- purrr::keep(stopwords_, function(x) grepl("['-]+", x))
 other1 <- gsub("[[:punct:]]", "", other) 
 other2 <- unique( gsub("[[:punct:]][a-z]+", "", other) )
+ohter3 <- c("didn", "doesn", "aren", "isn", "wasn", "weren", "couldn")
 
 stopwords <- c(stopwords_, other1, other2)
 remove(other, other1, other2)
@@ -1379,7 +1397,7 @@ dic_l.tdb <- tidytable(dic_suggest) %>%
       filter(count >= 500 ) %>%
       cbind(flag = -1) %>%
       cbind(correction = 'none') %>%
-      select.(count, term, term_stem, term_lem, suggest, flag, correction, dist_source_stem) 
+      select.(count, term, term_stem, term_lem, suggest, flag, correction, dist_source_stem, dist_term) 
    
 # flag if a word is in stopwords vec
 dic_l.tdb$flag = ifelse.(dic_l.tdb$term_stem %in% stopwords, 1, 0)
@@ -1390,7 +1408,16 @@ dic_l.tdb$correction = ifelse.(dic_l.tdb$flag == 1, dic_l.tdb$suggest, dic_l.tdb
 # if lev dist from raw string and stem. string is 0 ..
 dic_l.tdb$correction = ifelse.(dic_l.tdb$dist_source_stem == 0 & 
                                   dic_l.tdb$flag != 1, 
-                                      dic_l.tdb$term, dic_l.tdb$suggest)
+                                      dic_l.tdb$term, dic_l.tdb$correction)
+
+dic_l.tdb$correction = ifelse.(dic_l.tdb$dist_term == 0 & 
+                                  dic_l.tdb$flag != 1 &
+                                  dic_l.tdb$dist_term < dic_l.tdb$dist_source_stem, 
+                                      dic_l.tdb$suggest, dic_l.tdb$correction)
+
+
+dic_l.tdb %>% 
+   filter( flag == 1 )
 
 print("stop words founded")
 print(sum(dic_l.tdb$flag))
@@ -1401,19 +1428,18 @@ print("in %")
 print(sum(dic_l.tdb$flag)/ nrow(dic_l.tdb) * 100 )
 ```
 
+
 ```{r large-dictionary-2}
 
 dic_l <- dic_l.tdb %>%
-      mutate.( correction = little_correction(correction) ) %>%
+      mutate.( correction = word.little_correction(correction) ) %>%
       select.(count, term, correction, flag) %>%
       mutate.(check = hunspell_check(correction)) %>%
       group_by(flag) %>%
       arrange.(desc(count))
 
-print("Percent of dic_large's correct words over dic_large's dim")
-print(nrow( dic_l[ check == TRUE] ))
-print("Percent of dic_large's correct words over total dim")
-print(nrow( dic_l[ term != correction] ) / nrow(dic_l) * 100)
+print("Number of correct words in my large dictionary")
+print(nrow( dic_l))
 
 ```
 
@@ -1452,7 +1478,7 @@ print(sum(dic_m.tdb$flag)/ nrow(dic_m.tdb) * 100 )
 ```{r medium-dictionary-2}
 
 dic_m <- dic_m.tdb %>%
-      mutate( correction = little_correction(correction) ) %>%
+      mutate( correction = word.little_correction(correction) ) %>%
       select(count, term, correction, flag) %>%
       mutate.(check = hunspell_check(correction)) %>%
       group_by(flag) %>%
@@ -1490,6 +1516,14 @@ remove(dic_suggest)
  - a cosa mi potrebbe servire 
  - lo stemming mi potrebbe esser utile? 
  - misure di distanze? **lev e poi? 
+
+
+```{r}
+
+
+
+```
+
 
 ### Words manipulation for sentiment
 

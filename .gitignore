@@ -1,30 +1,35 @@
-.Rproj.user
-.Rhistory
-.RData
-.Ruserdata
+Project/Rproj.user
+Project/Rhistory
+Project/RData
+Project/Ruserdata
 
-.renv/
-.renv.lock
-.rsconnect/
 
 .data/
 
 Project/renv/
-
-Project/report/note.pdf
 
 Project/report/note_en.Rmd
 
 Project/Data/
 
 Project/Report/note_files/
+Project/Report/note_cache/
+Project/Report/data-report
 
 Project/.RDataTmp
 
-Project/Report/dogecoin
 
-Project/Report/note_cache/
+PythonScript/data_apr
+PythonScript/venv_ds
+PythonScript/environment.yml
+
+
 
 *.csv
 
 *.rds
+.Rproj.user
+
+Project/.RData
+
+Project/.Rhistory
