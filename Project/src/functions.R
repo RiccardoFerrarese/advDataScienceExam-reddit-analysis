@@ -1,6 +1,6 @@
 source("./src/lib.R")
 
-dfm.frequency <- function(.dfm, n = 50){
+dfm.frequency <- function(.dfm, n = 50, plot = TRUE){
    
    features_dfm <- textstat_frequency(.dfm, n)
    
@@ -8,27 +8,40 @@ dfm.frequency <- function(.dfm, n = 50){
    
    # Sort by reverse frequency order
    features_dfm$feature <- with(features_dfm, reorder(feature, -frequency))
-
-
-   plot <- features_dfm %>%
-      ggplot(aes(x = feature, y = frequency)) +
+   features_dfm$rank <- as.numeric(features_dfm$rank)
+   if(plot){
+      plot <- features_dfm %>%
+         ggplot(aes(x = rank, y = frequency)) +
          geom_point(size=0.1) + 
          scale_y_log10() + 
+         scale_x_log10() + 
          theme_classic() +
-         theme(axis.text.x = element_blank())
-   
-   #theme(axis.text.x = element_text(angle = 90, hjust = 1))
-   
-   plot2 <- features_dfm %>%
-      filter(frequency > 10000 ) %>%
-      ggplot(aes(x = feature, y = frequency)) +
-      geom_point(size=0.01) + 
-      scale_y_log10() + 
-      theme_classic() +
-      theme(axis.text.x = element_blank())
-   
-   print(plot + plot2)
-   
+         theme(axis.text.x = element_blank(), 
+               axis.title.x = element_text("log( rank )"), 
+               axis.title.y = element_text("log( frequency )"))
+      
+      features_dfm$feature <- with(features_dfm, reorder(feature, -rank))
+      #theme(axis.text.x = element_text(angle = 90, hjust = 1))
+      
+      mod = lm(log10(features_dfm$frequency) ~ log10(features_dfm$rank), data = features_dfm)
+      #print(mod$coefficients[1])
+      plot2 <- features_dfm %>%
+         ggplot(aes(x = rank, y = frequency)) +
+         geom_abline(intercept = mod$coefficients[1], 
+                     slope = mod$coefficients[2], 
+                     color = 'red', 
+                     linetype = 3
+                     ) +
+         geom_line(size=0.5) + 
+         scale_y_log10() + 
+         scale_x_log10() + 
+         theme_classic() +
+         theme(axis.text.x = element_blank(), 
+               axis.title.x = element_text("log( rank )"), 
+               axis.title.y = element_text("log( frequency )"))
+      
+      print(plot + plot2)
+   }
    return(features_dfm)
 }
 
@@ -178,7 +191,7 @@ word.manipulation <- function(data, word1, word2, word3, mode = 0, ngrams = 1){
 # data :: text corpus 
 # stop :: bool for remove stop word
 # ngrams :: {1,2,3} for compute corpus on ngrams
-corpus.tokenize_dfmTidy <- function(data, stop=TRUE, eng_word = FALSE, ngrams=1){
+corpus.tokenize_dfmTidy <- function(data, stop=TRUE, spell_checking = FALSE, mode_correction = 0, ngrams=1){
    
    # if stopword .. 
    # build toks  
@@ -198,9 +211,20 @@ corpus.tokenize_dfmTidy <- function(data, stop=TRUE, eng_word = FALSE, ngrams=1)
                                remove_url = TRUE)
    }
    
-   if( eng_word ){
-      # take a dictionary with engish word for clean data 
-      #toks <- tokens_select(toks,)
+   if( spell_checking ){
+      
+      # correct words with my dictionary 
+      if( mode_correction == 0){
+         dict <- readRDS("../Data/dictionary.rds")
+         
+         dict <- dict %>% drop_na()
+         dic_words <- dict$term
+         correct <- dict$correction
+         
+         toks <- tokens_replace(toks, dic_words, correct, case_insensitive = TRUE)
+      } else if( mode_correction == 1){
+         # correct all words with first hunspell's suggestion
+      }
    }
    
    # if ngrams -- compute toks for bigrams or trigrams 
@@ -268,7 +292,7 @@ corpus.clean_tidy <- function(tidy, ngrams=1, mode = "none"){
 # bool_plot_count :: boolean to indicate whether to plot word counts or not 
 # bool_plot_freq :: boolean to indicate whether to plot word frequencies or not
 corpus.countPlot_tidy <- function(data, threshold_count=1000, threshold_freq=0.001, 
-                                  ngrams=1, 
+                                  ngrams=1, plot = TRUE, 
                                   bool_plot_count=TRUE, bool_plot_frequency=TRUE){
    
    if(ngrams == 2){
@@ -291,36 +315,39 @@ corpus.countPlot_tidy <- function(data, threshold_count=1000, threshold_freq=0.0
    word_counts <- word_counts %>%
       mutate( count = as.integer(count)) %>%
       mutate( total_of_word = total_of_word ) %>%
-      mutate( frequency = (count/total_of_word)*100)
+      mutate( frequency = count/total_of_word)
    
-   # plot for count col
-   plot_freq <- word_counts %>%
-      filter( frequency > threshold_freq) %>%
-      ggplot(aes(words, frequency)) + 
-      geom_point(alpha = 0.3, size = 1.5, width = 0.25, height = 0.1) + 
-      geom_text(aes(label = words), check_overlap = TRUE, vjust = 1) + 
-      theme_classic() + 
-      theme(axis.text.x=element_blank()) 
-   
-   # plot for frequency col
-   plot_count <- word_counts %>%
-      filter( count > threshold_count) %>%   
-      ggplot(aes(words, count)) + 
-      geom_point(alpha = 0.3, size = 1.5, width = 0.25, height = 0.1) + 
-      geom_text(aes(label = words), check_overlap = TRUE, vjust = 1) + 
-      scale_y_log10() + 
-      theme_classic() + 
-      theme(axis.text.x=element_blank()) 
-   
-   
-   # print selected plot 
-   if(bool_plot_count & bool_plot_frequency){
-      print(plot_freq + plot_count + plot_layout(ncol=1, heights = c(4,4)) )
-   } else if(bool_plot_count){
-      print(plot_count)
-   } else if(bool_plot_frequency){
-      print(plot_freq)
+   if(plot){
+      # plot for count col
+      plot_freq <- word_counts %>%
+         filter( frequency > threshold_freq) %>%
+         ggplot(aes(words, frequency)) + 
+         geom_point(alpha = 0.3, size = 1.5, width = 0.25, height = 0.1) + 
+         geom_text(aes(label = words), check_overlap = TRUE, vjust = 1) + 
+         theme_classic() + 
+         theme(axis.text.x=element_blank()) 
+      
+      # plot for frequency col
+      plot_count <- word_counts %>%
+         filter( count > threshold_count) %>%   
+         ggplot(aes(words, count)) + 
+         geom_point(alpha = 0.3, size = 1.5, width = 0.25, height = 0.1) + 
+         geom_text(aes(label = words), check_overlap = TRUE, vjust = 1) + 
+         scale_y_log10() + 
+         theme_classic() + 
+         theme(axis.text.x=element_blank()) 
+      
+      # print selected plot 
+      if(bool_plot_count & bool_plot_frequency){
+         print(plot_freq + plot_count + plot_layout(ncol=1, heights = c(4,4)) )
+      } else if(bool_plot_count){
+         print(plot_count)
+      } else if(bool_plot_frequency){
+         print(plot_freq)
+      }
+      
    }
+   
    
    # split words for sentiment analysis 
    if(ngrams == 3 ){
