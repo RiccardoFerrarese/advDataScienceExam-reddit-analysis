@@ -33,3 +33,5 @@ PythonScript/environment.yml
 Project/.RData
 
 Project/.Rhistory
+/Project/renv/
+/Project/Report/data

@@ -30,6 +30,8 @@ hook_output <- knitr::knit_hooks$get("output")
 
 # my print func
 print_ <- function(string){ paste0("\n", string, "\n") %>% cat()}
+
+# ulimit -s 16384 
 ```
 
 
@@ -423,7 +425,7 @@ La prima funzione definita , _df.create_, verrà utilizzata per creare il datase
 ```{r text_mining}
 ## data must have cols : (created_utc, author, body )
 # data is pushshift's returned csv
-df.create <- function(data, dir, subR, filter_post=-1){
+df.create <- function(data, dir, subR, filter_post=){
    
    # compute type date
    # add unique id for each comment 
@@ -577,12 +579,14 @@ La funzione che calcola i token permette di scegliere, tramite argomento, se cal
 
 Successivamente le parole vengono filtrate in modo tale da rimuove caratteri speciali che si trovano agli estremi di esse, infatti reddit permette di inserire dei caratteri per enfatizzare le parole, similmente all' _underscore_ e altri  nel formato Markdown. Inoltre vengono rimosse le parole formate da uno e due caratteri, in modo tale da ridurre il numero di onomatopee che vengono utilizzate nel linguaggio dei messaggi. Questa scrematura non è risultata sufficiente per costruire un dataset con solo parole con un significato compiuto, ma dal momento che 'parole' prive di significato avranno poche ripetizioni all'interno di tutto il corpus di testo, potranno esser rimosse successivamente dai grafici con un filtro sul conteggio. Inoltre per l'analisi del sentimento un gran numero di parole non troveranno un accoppiamento nei dataset messi a disposizioni, tra queste anche quelle prive di significato. 
 
-Dopo una prima pulitura delle parole è possibile, tramite argomento della funzione, specificare se si vuole o meno eseguire lo _stemming_ oppure la _lemmatization_.
+Dopo una prima pulitura delle parole è possibile, tramite argomento della funzione, specificare se si vuole o meno eseguire lo _stemming_ oppure la _lemmatization_. Si è scelto di usare tecniche diverse in base al task: 
+- per l'analisi del sentimento la correzione ed eventuale lemmatization
+- per il conteggio delle parole lo stemming 
+
+> La funzione corpus.tokenize_dfmTidy permette di tokenizzare il corpo del testo rimuovendo le stopwords, eseguire diversi tipi di correzione dei token, siamo per termini che per bigrammi e trigrammi. 
 
 Infine, l'utlima funzione qua definita permette di eseguire il conteggio di ogni token dato un dataframe in formato _tidy_ ed è anche possibile, tramite argomento, specificare se si vuole disegnare il grafico relativo alle frequenze. 
 
-- sentiment with lammatization 
-- count with stemming 
 
 
 ```{r, result='hide'}
@@ -590,11 +594,11 @@ Infine, l'utlima funzione qua definita permette di eseguire il conteggio di ogni
 # data :: text corpus 
 # stop :: bool for remove stop word
 # ngrams :: {1,2,3} for compute corpus on ngrams
-corpus.tokenize_dfmTidy <- function(data, stop=TRUE, spell_checking = FALSE, mode_correction = 0, ngrams=1){
+corpus.tokenize_dfmTidy <- function(data, remove_stop=TRUE, spell_checking = FALSE, mode_correction = 0, ngrams=1){
    
    # if stopword .. 
       # build toks  
-   if(stop){
+   if(remove_stop){
       toks <- quanteda::tokens_select(
                   quanteda::tokens(data,
                          remove_punct = TRUE, 
@@ -623,6 +627,9 @@ corpus.tokenize_dfmTidy <- function(data, stop=TRUE, spell_checking = FALSE, mod
          toks <- tokens_replace(toks, dic_words, correct, case_insensitive = TRUE)
       } else if( mode_correction == 1){
          # correct all words with first hunspell's suggestion
+      } else if( mode_correction == 2){
+         # vader 
+         
       }
    }
    
@@ -766,11 +773,20 @@ corpus.countPlot_tidy <- function(data, threshold_count=1000, threshold_freq=0.0
 #### Function for the sentiments
 
 
-Le funzioni definite per l'analisi del sentimento del testo permettono di classificare ciascuna parola (o n-gramma) secondo i valori built-in dei dataset messi a disposizione nella libreria _textdata_. 
+Le funzioni definite per l'analisi del sentimento del testo permette di classificare ciascuna parola (o n-gramma).
 
 Per un analisi generale dei sentimenti di ciascun subreddit si è scelto di utilizzare i sentimenti elencati nel dataset _"nrc"_. Per classificare ciascuna parola sono stati utilizzati entrambe le categorizzazioni messe a disposizione da _"afinn"_, che permette di avere un punteggio numerico per identificare la positività o meno del sentimento, e da _"bing"_, che più semplicemente da solo una categorizzazione tra parole positive e negative. 
 
-L'ultima funzione permette di visualizzare la rete che rappresenta le relazioni che intercorrono tra le singole parole contenute nei bigrammi e trigrammi. 
+```
+La funzione words.classSentiment permette di classificare termini, bigrammi e trigrammi a seconda del sentimento corrispondente nel 
+dataset "nrc". Calcola i conteggi per ogni sentimento e ne fa il grafico in base alla soglia di conteggio definibile tramite argomento.
+```
+
+```
+La funzione words.computeSentiment permette di classificare termini, bigrammi e trigrammi a seconda del sentimento corrispondente nei dataset "bing" e "afinn". Calcola i conteggi per ogni parola divisa per sentimento e ne fa il grafico in base alla soglia di conteggio definibile tramite argomento.
+```
+
+
 
 ```{r sentiment-function}
 
@@ -992,8 +1008,6 @@ https://gensimr.news-r.org/reference/model_lda.html
 Dopo aver definito tutte le funzioni possiamo vedere come esse siano organizzate, così da poter capire il codice delle analisi di ciascun dataset. 
 
 
-
-
 ### DogeCoin's Subreddit
 
 I primi dati che andremo ad analizzare sono quelli relativi al subreddit di DogeCoin, riferiti alla medesima crypto-valuta la cui frase di presentazione sulla loro pagina web è "Dogecoin è una criptovaluta open source e peer-to-peer, amata dagli Shiba Inu di tutto il mondo.". Un ulteriore curiosità è che il logo raffigurante la razza di cane simbolo di questa valuta è tratto da dei meme popolari sul web. 
@@ -1005,7 +1019,7 @@ Questa crypto-moneta ha avuto molto successe dal momento in cui una grossa comun
 
 Come prima cosa scarichiamo i dati riguardanti il subreddit da analizzare.
 
-```{r include=FALSE}
+```{r}
 if(!(exists('doge_com_raw_data'))){
    doge_com_raw_data <- read.csv("../Data/src/dogecoin_com.csv")
 }
@@ -1301,7 +1315,7 @@ Si mostra la tabella di contingenza prima di aver applicato la correzione del di
 | #num of toks bigrams | Raw   | 3,597,421 | 4,165,904 |
 |                      | Clean | 3,189,821 | 3,646,399 |
 * with stop words
-** i tokens non sono univoci 
+** tokens not unique 
 
 ```{r include=FALSE}
 remove(com_doge)
@@ -1313,7 +1327,8 @@ remove(post_clean_bigram_dfm)
 
 ##### Analize uncorrect words
 
-Essendo i corpus di testo recuperati da un social media la maggior parte delle parole digitate ci si aspetta non siano ortograficamente corrette. Sono quindi state utilizzate le funzioni della libreria _hunspell_, che permette di verificare se una parola risulta corretta o meno, rispetto il loro dizionario , oppure di individuare una lista di suggerimenti per la correzione. 
+Essendo i corpus di testo recuperati da un social media, perciò dalle parole digitate non ci si aspetta la correttezza ortografica. Sono quindi state utilizzate le funzioni della libreria _hunspell_, che permette di verificare se una parola risulta corretta o meno, rispetto il loro dizionario , oppure di individuare una lista di suggerimenti per la correzione.
+
 ```{r}
 
 if(save){ 
@@ -1353,7 +1368,7 @@ print_(paste0("CORRECT WORDS ", round(perc_t, 2), "% of total words", sep = " ")
 Come si è potuto vedere dai precedenti risultati, il numero di parole classificate come lessicalmente non corrette risulta molto alto. Si è provato quindi a recuperare almeno le parole maggiormente influenti nel dataset.
 
 
-```{r spell-checking-words}
+```{r spell-checking-words2}
 
 correct_post <- post_clean_tidy %>%
    mutate(check = hunspell_check(words)) 
@@ -1363,12 +1378,12 @@ print(summary(correct_post))
 remove(post_clean_tidy)
 ```
 
-La seguente funzione, oltre ad aggregare i conteggi delle parole ripetute avendo un id del documento diverso, aggiunge al dataframe una colonna con valori booleani per indicare se la parola risulta corretta o meno. Da notare come molte parole non comuni, come per esempio 'dogecoin', vengono classificate come non corrette. 
+La seguente funzione, oltre ad aggregare i conteggi delle parole ripetute avendo un id del documento diverso, aggiunge al dataframe una colonna con valori booleani per indicare se la parola risulta corretta o meno. Da notare come molte parole non comuni, come per esempio 'dogecoin', non vengono classificate come corrette. 
 
 ```{r def-spell-checking}
 words.spell_checking <- function(data){
    # counts word
-   com_counts <- corpus.countPlot_tidy(correct_post, bool_plot_count = FALSE, 
+   com_counts <- corpus.countPlot_tidy(data, bool_plot_count = FALSE, 
                                                 bool_plot_frequency = FALSE)
    
    # check words
@@ -1430,7 +1445,7 @@ dim(uncorrect_stem_lem)
 summary(uncorrect_stem_lem)
 ```
 
-Sempre a causa degli errori grammaticali, certe parole, ma sopratutto certe stopwords, non vengono riconosciute e i suggerimenti per la correzione risultano a loro volta sbagliati. Di seguito una prima funzione per effettuare una correzione manuale della parola, altrimenti viene chiamata la funzione _hunspell\_suggest_ da cui viene preso il primo elemento suggerito. 
+Sempre a causa degli errori grammaticali, certe parole, ma sopratutto certe stopwords, non vengono riconosciute e i suggerimenti per la correzione risultano a loro volta sbagliati. Di seguito una prima funzione per effettuare una correzione manuale della parola, altrimenti si chiama la funzione _hunspell\_suggest_ da cui viene preso il primo elemento suggerito. 
 
 Eseguiamo questa funzione all'interno di una pipe di _dplyr_, per poi aggiungere al dataset le distanze tra le diverse stringhe nella lista. 
 
@@ -1441,6 +1456,8 @@ words.spell_checking <- function(data, input) {
       mutate( suggest = 
              case_when(
                # any manual corrections
+               {{input}} == 'gbp' ~ 'gbp',
+               {{input}} == 'halving' ~ 'halving',
                {{input}} == 'aways' ~ 'away',
                {{input}} == 'covid' ~ 'covid',
                {{input}} == 'binance' ~ 'binance',
@@ -1459,6 +1476,7 @@ words.spell_checking <- function(data, input) {
                {{input}} == "wasnt" ~ "was not", 
                {{input}} == "wouldn" ~ "would not", 
                {{input}} == "wouldnt" ~ "would not",
+               {{input}} == 'hadn' ~ 'had not', 
                
                {{input}} == "ive" ~ "i have",
                {{input}} == "youre" ~ "you are",
@@ -1520,7 +1538,9 @@ word.little_correction <- function(input){
       input == 'gme' ~ 'gme',
       input == 'font' ~ 'dont',
       input == 'stonks' ~ 'stonks',
-      grepl("^go*", input) ~ 'go',
+      grepl("^hold[d+]", input) ~ 'hold' ,
+      grepl("^s[o+]", input) ~ 'so', 
+      grepl("^g[o+]", input) ~ 'go',
       grepl("^usa", input) ~ 'usa',
       TRUE ~ input
    )
@@ -1538,7 +1558,7 @@ remove(stopwords)
 other <- purrr::keep(stopwords_, function(x) grepl("['-]+", x))
 other1 <- gsub("[[:punct:]]", "", other) 
 other2 <- unique( gsub("[[:punct:]][a-z]+", "", other) )
-ohter3 <- c("didn", "doesn", "aren", "isn", "wasn", "weren", "couldn")
+ohter3 <- c("didn", "doesn", "aren", "isn", "wasn", "weren", "couldn", 	"hadn")
 
 stopwords <- c(stopwords_, other1, other2)
 remove(other, other1, other2)
@@ -1547,10 +1567,12 @@ dim <- dim(dic_suggest)[1]
 ```
 
 La correzione è stata effettuata con i seguenti passi: 
-- flag
-- if flag term_stem else suggest
-- for stopwords used suggest
-- if dist lev from source and stem word is 0 take stem # sigle o parole corte/non modificabili 
+- assegnare a una variabile colonna _flag_ un valore binario per indicare se la parola è presente tra le stopwords o meno.
+- Se la parola è una stopwords viene utilizzato il suggerimento ritornato da _hunspell_, altrimenti viene impostata come correzione lo stemming della parola.
+
+Dopo aver corretto le stopwords, si procede come segue: 
+- Se la distanza tra la stringa di partenza e il suo stemming è pari a 0, allora la parola non viene corretta non essendoci una radice riconoscible come stemming. 
+- Se la distanza sopra è maggiore di zero e la distanza tra la parola iniziale e il suggerimento di correzione è pari a zero, viene utilizzata come correzione il suggerimento dato da _hunspell_
 
 
 ```{r large-dictionary}
@@ -1601,7 +1623,7 @@ dic_l <- dic_l.tdb %>%
       group_by(flag) %>%
       arrange.(desc(count))
 
-print("Number of correct words in my large dictionary")
+print_("Number of words in my large dictionary")
 print(nrow( dic_l))
 
 ```
@@ -1706,7 +1728,8 @@ Uniamo questa logica alla funzione _corpus.tokenize_dfmTidy_ che abbiamo definit
 
 Possiamo così creare il nostro nuovo corpus, sostituendo tutte le parole presenti nel nostro dizionario con la loro correzione. 
 
-Da osservare che certi token risultano avere dei bigrammi, sarà quindi necessario duplicare la riga divendo le due parole. 
+Si potrebbe correggere tutte le parole restanti (quelle con conteggi minori) utilizzando la lemmatizzazione. 
+
 
 ```{r}
 
@@ -1716,37 +1739,43 @@ post_doge_correct <- corpus.tokenize_dfmTidy(data$corpus_post, stop = FALSE,
                                              spell_checking = TRUE, 
                                              mode_correction = 0)
 
-if(save){write_rds(post_doge_correct, "../Data/post_doge_raw_myCorrection.rds")}
+#if(save){write_rds(post_doge_correct, "../Data/post_doge_raw_myCorrection.rds")}
 ```
 
 ```{r}
 
-if(save){ 
-   remove(post_doge_correct)
-   post_doge_correct <- readRDS("../Data/post_doge_raw_myCorrection.rds")
-}
+#if(save){ 
+#   remove(post_doge_correct)
+#   post_doge_correct <- readRDS("../Data/post_doge_raw_myCorrection.rds")
+#}
 
 tidy_doge_correct <- post_doge_correct$tidy
 dfm_doge_correct <- post_doge_correct$dfm
 remove(post_doge_correct)
 
 dfm.frequency(dfm_doge_correct)
+remove(dfm_doge_correct)
 ```
 
-```{r}
-tidy_doge_correct %>%
-   filter(term == 'did not')
+Abbiamo però alcuni tokens che dopo la manipolazione comprendono due termini, dobbiamo quindi separarli ed andare nuovamente ad aggregare i conteggi. 
 
-# use tidytable with a big dataframe, else R session break
+```{r}
+# cast to tidytable
 tidy_doge_correct <- tidytable(tidy_doge_correct)
+# split words
 post_doge_correct_tidy <- tidy_doge_correct %>% 
     mutate.(term = strsplit(term, " ")) %>% 
     unnest.(term)
-
-tidy_doge_correct %>%
+```
+```{r}
+# verify it
+post_doge_correct_tidy %>%
    filter(term == 'did not')
+```
 
-dfm_correct_doge <- tidy_doge_correct %>%
+```{r}
+
+dfm_correct_doge <- post_doge_correct_tidy %>%
    cast_dfm(document, term, count)
 
 
@@ -1755,12 +1784,13 @@ if(save){
 }
 
 remove(tidy_doge_correct)
-remove(dfm_doge_correct)
 remove(post_doge_correct_tidy)
 ```
 
 
 ### Overview of semi-clean Doge Dataset 
+
+Ripetiamo l'analisi del dataset con i token corretti per confrontarne i conteggi. 
 
 ```{r}
 
@@ -1773,24 +1803,19 @@ if(save){
 } else {
    data = dfm_correct_doge
 }
+
+# cast to tidy 
 data_tidy <- tidytext::tidy(data)
-
-```
-
-```{r doge-unigram-stat}
-print("REDDIT's POST CORPUS with correction: ")
-print(data)
 remove(data)
 ```
 
-```{r}
-print("CELLS of mem FOR post DFM")
-print(prod(dim(data)))
-print("SPARSITY FOR post dfm")
-print(sparsity(data))
+```{r doge-unigram-stat2}
+print("REDDIT's POST CORPUS with correction: ")
+print(summary(data_tidy))
+print_("CLEAN POST CORPUS DIM: (docsxtoks)")
+print(dim(dfm_cor))
 ```
 
-Bisogna utilizzare la funzione _dfm\_trim_ per eliminare alcune parole del vocabolario con conteggi di basso valore. In tal modo si possono convertire gli oggetti tidy da liste a data.frame o meglio sarebbe utilizzare la libreria _tiytable_ per le sue performance (add cite). 
 
 ```{r}
 
@@ -1803,21 +1828,29 @@ post_clean_dfm <- post_clean_tidy %>%
 #print(post_clean_dfm)
 
 
-print("CLEAN POST CORPUS DIM: (docsxtoks)")
+print_("CLEAN POST CORPUS DIM: (docsxtoks)")
 print(dim(post_clean_dfm))
-print("")
 print("COLS of TIDY DF")
-print(colnames(com_clean_tidy))
+print(colnames(post_clean_tidy))
 print("TYPE OF TIDY DF")
-print(typeof(com_clean_tidy))
+print(typeof(post_clean_tidy))
+```
+Analizziamo nuovamente il numero di parole corrette e tra quelle scorrette quali sono quelle con i conteggi maggiori. 
+
+```{r}
+df <- words.spell_checking(post_clean_tidy)
+
+df$uncorrect %>%
+   arrange(desc(count))
 ```
 
-Guardando la frequenza delle parole nel testo, si può notare come ci sia una relazione proporzionale inversa tra la frequenza della parola e il suo rank nella tabella di contigenza, seguendo la ZipF Law. 
+Il contaggio delle parole corrette non è aumentato di molto, ma questo può esser causato anche dalle parole che _hunspell_ considera come scorrette. Infatti le parole più influenti considerante come scorrette in realtà possono essere considerate come corrette nel contesto in cui sono prese. 
 
-Display Formula [@zipfLaw]
+```{r include = FALSE }
+remove(df)
+```
 
-where r is the rank that is assigned to every word in the text. For most texts, regardless of language, time of creation, genre of literature, its purpose, etc. one finds that α ∼ 1, which is referred to as Zipf's law [1].
-
+Si va quindi a vedere se il grafico delle frequenze abbia subito qualche cambiamento. 
 
 ```{r}
 # frequency dfm clean - with stop words
@@ -1825,75 +1858,40 @@ freq <- dfm.frequency(post_clean_dfm, 8000)
 head(freq, 10)
 ```
 
-```{r tfidf-post}
-# compute tfidf 
-tfidf <- dfm_tfidf(post_clean_dfm)
-topfeatures(tfidf)
-```
+Anche in questo caso il grafico non ha avuto importanti cambiamenti. A differenza del grafico visualizzato prima di dividere i tokens che presentava una curva più in linea con la legge di ZipF, avendo separato molte stopwords sono aumentate le parole comuni.
 
-
-#### And, with stemming? 
+Si potrebbe valutare di utilizzare un correttore su tutti i token presenti, ma sarebbe necessario verificare che la correzzioni sia valida e non cambi completamente il significato della parola. 
 
 ```{r}
-
-post_clean_tidy_stem <- corpus.clean_tidy(data_tidy, mode = "stem")
-
-post_clean_dfm_stem <- post_clean_tidy_stem %>%
-   cast_dfm(document, words, count)
-#print(post_clean_dfm)
-```
-
-```{r}
-
-print("CLEAN POST CORPUS DIM: (docsxtoks)")
-print(dim(post_clean_dfm_stem))
-print("")
-print("TYPE OF TIDY DF")
-print(typeof(post_clean_dfm_stem))
-```
-```{r}
-# frequency dfm clean - with stemming
-freq <- dfm.frequency(post_clean_dfm_stem, 8000)
-head(freq, 10)
-```
-
-
-Copiamo i dataframe che ci possono esser utili nell'analisi del dizionario per correggere lessicalmente le parole errate e rimuoviamo tutti gli oggetti che abbiamo utilizzato. 
-
-```{r clean-env-textstat}
-tidy_doge_com <- com_clean_tidy
-tidy_doge_post <- post_clean_tidy
-
-#remove(data)
-remove(com_doge)
-remove(post_doge)
-
-remove(com_clean_tidy)
-remove(post_clean_tidy)
-
-remove(com_clean_dfm)
 remove(post_clean_dfm)
-
-remove(com_clean_tidy_stem)
-remove(post_clean_tidy_stem)
-
-remove(post_clean_dfm_stem)
-remove(com_clean_dfm_stem)
-
+remove(post_clean_tidy)
+remove(dfm_correct_doge)
 remove(freq)
-remove(tfidf)
 ```
 
-#### Tokenization of Bigrams
+Per completezza andiamo ad analizzare i conteggi anche per i bigrammi creati a partire dai dati con alcune parole corrette. 
 
-```{r bigrams-stat}
-post_doge <- corpus.tokenize_dfmTidy(data_tidy, ngrams = 2)
+```{r bigrams-stat2}
+
+if(save){data <- readRDS("../Data/dogecoin.rds")}
+post_corpus <- data$corpus_post 
+remove(data)
+
+post_doge <- corpus.tokenize_dfmTidy(post_corpus, 
+                                     stop = FALSE, 
+                                     spell_checking = TRUE, 
+                                     mode_correction = 0,
+                                     ngrams = 2)
 print("REDDIT's POST CORPUS: ")
 print(post_doge$dfm)
+
+remove(post_corpus)
 ```
 
-```{r bigrams-clean-txtstat}
-post_clean_tidy <- corpus.clean_tidy(post_doge$tidy, ngrams = 2)
+```{r bigrams-clean-txtstat2}
+post_clean_tidy <- post_doge$tidy
+remove(post_doge)
+post_clean_tidy <- corpus.clean_tidy(post_clean_tidy, ngrams = 2)
 
 print("CLEAN POST CORPUS: ")
 post_clean_bigram_dfm <- post_clean_tidy %>%
@@ -1902,28 +1900,32 @@ print(post_clean_bigram_dfm)
 ```
 
 
-|      DogeCoin Corpus | Type  | # Original Post | # Post   | # Post *  |
-| -------------------: | ----- | --------- | --------- | --------- |
-|         #num of docs | Raw   | 439,054   |     | |
-|                      | Clean | 419,718   |    | |
-|         #num of toks | Raw   | 77,567    |    | |
-|                      | Clean | 59,551    |    | |
-|     # hunspell check | TRUE  | 23,908    |    | |
-|                      | FALSE | 35,643    |    | |
-|                      |       |           |     | |   
-|  #num of stem toks   | Clean | 44,315    |    | |
-|                      |       |           |     | |   
-| #num of docs bigrams | Raw   | 439,054   |    | |
-|                      | Clean | 358,989   |    | |
-| #num of toks bigrams | Raw   | 1,175,788 |  | |
-|                      | Clean | 1,055,811 |  | |
+|      DogeCoin Corpus | Type  | # Original Post | # Post *  |
+| -------------------: | ----- | --------- | --------- | 
+|         #num of docs | Raw   |  185,823  |  183,609  | 
+|                      | Clean |  182,679  |  182,646  | 
+|         #num of toks | Raw   |  198,709  |  198.473  | 
+|                      | Clean |  140,241  |  140,175  | 
+|     # hunspell check | TRUE  |  36,086   |  36,118   | 
+|                      |       |           |     |    
+| #num of docs bigrams | Raw   | 185,823   |  185,823  | 
+|                      | Clean | 172,952   |  174,777  | 
+| #num of toks bigrams | Raw   | 4,165,904 | 3,159,569 | 
+|                      | Clean | 3,646,399 | 2,316,567 | 
 * with spell checker 
+** tokens not unique
 
+
+```{r}
+remove(post_clean_bigram_dfm)
+remove(post_clean_tidy)
+```
 ### Words manipulation for sentiment
 
 Facciamo un'osservazione sul numero di parole che si andranno ad utilizzare per l'analisi dei sentimenti. Lemmatizazzione e stemming, sono le due tecniche per operare su
 
 ```{r doge-unigrams-manipulation, result='hide'}
+
 lab.dizCompare<- function(correction = FALSE, stop=FALSE){
    
    if(correction){
@@ -2020,53 +2022,76 @@ Il numero di parole presenti nei due dataset non è cambiato molto, tuttavia ne 
 
 ### Final Analysis
 
+Una volta pulito il nostro dataset e prese le decisioni riguardo le manipolazioni da effettuare, andiamo ad analizzare la frequenza delle parole, cercando di capire quali siano i temi più influenti trattati nei commenti del subreddit di dogecoin. Per questa parte di analisi verranno rimosse le stopwords dal corpus e andremmo ad utilizzare lo stemming per raggruppare parole con la stessa radice.
+
 Pairs like “Elizabeth” and “Darcy” are the most common co-occurring words, but that’s not particularly meaningful since they’re also the most common individual words. We may instead want to examine correlation among words, which indicates how often they appear together relative to how often they appear separately.
 
 In particular, here we’ll focus on the phi coefficient, a common measure for binary correlation. The focus of the phi coefficient is how much more likely it is that either both word X and Y appear, or neither do, than that one appears without the other.
 
-In questa sezione verrà propsta un'analisi del corpus del dataset corretto del subreddit di dogecoin, sia rispetto le singole parole presenti, sia utilizzando i bigrammi. 
+In questa sezione verrà proposta un'analisi del corpus del dataset corretto del subreddit di dogecoin, sia rispetto le singole parole presenti, sia utilizzando i bigrammi. 
 
 ```{r, crop=TRUE}
 
 data <- readRDS("../Data/dogecoin.rds")
 doge_corpus <- data$corpus_comm
-doge_tidy <- corpus.tokenize_dfmTidy(doge_corpus)
-doge_clean_tidy <- corpus.clean_tidy(doge_tidy$tidy)
-doge_word_counts <- corpus.countPlot_tidy(doge_clean_tidy, threshold_count = 50)
+remove(data)
+                                             
+doge_tidy <- corpus.tokenize_dfmTidy(doge_corpus, 
+                                     spell_checking = TRUE, 
+                                     mode_correction = 0)
+doge_clean_tidy <- corpus.clean_tidy(doge_tidy$tidy, mode='stem' )
+doge_word_counts <- corpus.countPlot_tidy(doge_clean_tidy, threshold_count = 2000)
 
 ```
-
 ```{r, crop=TRUE}
 
 set.seed(190)
 
 dff <- doge_tidy$dfm
 # colour of words from least to most frequent
-textplot_wordcloud(dff, min_count = 5000,
+textplot_wordcloud(dff, min_count = 10000,
      color = c('pink', 'red', 'green3', 'purple', 'orange', 'blue3'))
 remove(dff)
 ```
+
+Tra le parole più presenti, oltre a doge, possiamo notare parole come: 
+- buy
+- hold
+- moon
+- invest/keep
+
 
 ```{r doge-unigrams-sentiment, crop=TRUE}
 words.classSentiment(doge_word_counts)
 ```
 
+Tenendo conto che molte parole, magari offensive, vengano utilizzante in discussioni che non c'entrano molto con il mercato della moneta, la divisione in classi dei sentimenti ci fa vedere come ci sia 
+
+
 ```{r doge-word-sentiment, crop=TRUE}
 doge_word_sentiment <- words.computeSentiment(doge_word_counts, n_filter = 10)
 ```
 
+In questo grafico possiamo trovare parole interessanti divise in base alla loro positività. Nella parte negativa si può notare subito come 'dump', termine che in finanza significherebbe far sgonfiare il prezzo, sia molto utilizzata e attorno una serie di parole che non sono legate alla fiducia, ma al contrario fanno capire come il mercato di questa moneta non sia percepito come non stabile. Dall'altra parte ci sono parole che cercano di ingoraggiare all'investimento in dogecoin. 
+
+Andiamo però a visualizzare i bigrammi per vedere se queste parole prese con un minimo di contesto facciano presumere le stesse ipotesi. 
 
 
-```{r}
+```{r include = FALSE}
 remove(doge_tidy)
 remove(doge_clean_tidy)
 remove(doge_word_counts)
+remove(doge_word_sentiment)
 ```
 
 
 ```{r doge-bigrams, crop=TRUE}
 
-doge_tidy_bigrams <- corpus.tokenize_dfmTidy(doge_corpus, ngrams=2)
+doge_tidy_bigrams <- corpus.tokenize_dfmTidy(doge_corpus, 
+                                          spell_checking = TRUE, 
+                                          mode_correction = 0, 
+                                          ngrams=2)
+
 doge_clean_tidy_bigrams <- corpus.clean_tidy(doge_tidy_bigrams$tidy,
                                                      ngrams = 2)
 doge_bigrams_counts <- corpus.countPlot_tidy(doge_clean_tidy_bigrams, 
@@ -2074,23 +2099,341 @@ doge_bigrams_counts <- corpus.countPlot_tidy(doge_clean_tidy_bigrams,
                                                    ngrams = 2)
 ```
 
+Analizzando i bigrammi si può notare ancor più maggiormente che la gran parte delle parole si riferiscono a spingere gli utenti ad acquistare e mantenere i dogecoin nel proprio wallet digitale. 
+
 ```{r doge-bigrams-sentiment, crop=TRUE}
-bigrams_class_sentiment <- words.classSentiment(doge_bigrams_counts, n_filter_sentiment = 2500, ngrams = 2)
+bigrams_class_sentiment <- words.classSentiment(doge_bigrams_counts, n_filter_sentiment = 10000, ngrams = 2)
 ```
 
+Considerando le classi dei sentimenti sui bigrammi la situazione cambia un poco. Infatti i sentimenti positivi risultano maggiori, ma sempre con un po' di incertezza considerando i bigrammi in cui viene associato il sentimento di fiducia con sentimenti negativi. 
 
 ```{r doge-bigrams-word-sentiment, crop=TRUE}
-bigrams_sentiment <- words.computeSentiment(doge_bigrams_counts, n_filter = 10, ngrams = 2)
+bigrams_sentiment <- words.computeSentiment(doge_bigrams_counts, n_filter = 50, ngrams = 2)
 ```
-
+Similmente andando a classificare ciascuna parola in una scala da 0 a 1, che indica la positività di un bigramma, il numero di parole negative sembra essere molto minore a quelle positive. 
 
 ```{r doge-net-bigrams, crop=TRUE}
-words.network(doge_bigrams_counts)
+words.network(doge_bigrams_counts, n_filter = 2000)
 ```
+
+Dalle rete delle parole, con conteggi superiori a 2000, possiamo cogliere altre informazioni molto interessanti, come l'accostamento delle parole right e dips, che in ambito finanziario si potrebbero associare allo slogan "Buy the dips", con il significato di comprare un asset successivamente al suo crollo di prezzo. Un'altra osservazione può esser fatta sulla parola "buy" che presenta un numero di archi collegati superiore alla maggior parte delle parole oltre a 'doge'. 
+
+Inoltre, a confermare l'ipotesi che gli utenti spingano all'acquisto e possesso di questa cryptovaluta, c'è l'accostamento della parola "stop" con "selling", proprio per incentivare a non vendere e quindi a non far calare di prezzo il valore dei dogecoin. 
+
 
 ```{r}
 remove(doge_tidy_bigrams)
 remove(doge_clean_tidy_bigrams)
 remove(doge_bigrams_counts)
+
+remove(bigrams_class_sentiment)
+remove(bigrams_sentiment)
 ```
+
+
+### Comments per Time 
+
+```{r}
+data <- readRDS("../Data/dogecoin.rds")
+doge_df <- data$df_comm
+doge_corpus <- data$corpus_comm
+
+remove(data)
+```
+
+
+```{r}
+plot_com_per_date <- function(dataset){
+
+   df_date <- dataset %>%
+      select(date, link_id) 
+      
+   
+   df_date%>%
+      group_by(date) %>%
+      summarise(n_com = n()) %>%
+      arrange(date) %>%
+      ggplot(aes(date, n_com)) +
+         geom_line(size = 0.3) +
+         xlab("Date") + 
+         ylab("Number of Comment") + 
+         scale_y_log10() + 
+         theme_minimal()
+}
+
+# plot for date of comment 
+plot_com_per_date(doge_df)
+
+```
+
+```{r}
+doge_com_2021 <- doge_df %>%
+   filter( date > as.Date('2020-12-31'))
+
+plot_com_per_date(doge_com_2021)
+
+```
+
+Possiamo identificare delle date in cui si sono verificati dei picchi di attività da parte degli utenti: 
+- Luglio 2020
+- Luglio 2020
+- Febbraio 2021
+- Aprile/Maggio 2021
+
+
+#### Sentiment over Time
+
+Per dare un sentimento ad ogni commento, una volta asseganti i sentimenti a ciascuna parola nei bigrammi del commento, sarà necessario calcolare la polarità generale delle frasi in modo da capirne l'andamento nel tempo. 
+
+> Sentiment polarity for an element defines the orientation of the expressed sentiment, i.e., it determines if the text expresses the positive, negative or neutral sentiment of the user about the entity in consideration.
+
+
+"""
+Con la funzione _words.computeSentiment_ abbiamo definito come assegnare a ciascuna parola il valore rappresentativo per il sentimento. In questa sezione è invece necessario trovare una strategia per rappresentare il sentimento dell'intero commento. 
+"""
+
+Si è scelto di utilizzare il concetto di polarità unendolo alla tecnica _Lexicon based_ che consiste nel conteggiare il numero di parole positive e negative per assegnare alla frase il sentimento più presente. Si ha quindi per ogni bigramma il suo corrispondete sentimento, che può essere positivo, negativo oppure neutro, successivamente andremo a calcolare il numero di bigrammi per ogni frase in modo da tener conto di questo nel calcolare il valore di sentimento finale per ciascun id corrispondente ad ogni comment. 
+
+L'obiettivo di utilizzare il conteggio delle parole nella frase è, avendo molti commenti corti, di dare un maggior peso a frasi in cui possiamo trovare sentimenti contrastanti. 
+
+Si utilizzerà il concetto di **polarità del sentimento** ...... avendo però classificato certe parole come neutre ---> add some other value for classify comment 
+
+
+```{r}
+
+corpus.compute_sentiment_per_comment <- function(tidy_clean_bigrams, data_txt){
+   
+   sentiment_per_doc <- tidy_clean_bigrams  %>% 
+            inner_join(get_sentiments("afinn"), by=c('word1'= 'word')) %>%
+            inner_join(get_sentiments("bing"), by=c('word1'= 'word')) %>%
+            inner_join(get_sentiments("afinn"), by=c('word2'= 'word')) %>%
+            inner_join(get_sentiments("bing"), by=c('word2'= 'word')) %>%
+            mutate( affin = (value.x + value.y) / 2) %>%
+            mutate( bing = case_when(sentiment.x == 'positive' & sentiment.y == 'positive' ~ 'positive', 
+                                     sentiment.x == 'negative' & sentiment.y == 'negative' ~ 'negative',
+                                     TRUE ~ 'neutral')) %>%
+      
+      
+            mutate( affin_nrm = range01(affin)) %>%
+            unite(words, c("word1", "word2"), sep = " ") %>%
+            mutate(id = as.integer(document)) %>%
+            select(id, words, affin, affin_nrm, bing)
+   
+
+   sentiment_per_comment <- sentiment_per_doc %>%
+      inner_join(data_txt, by='id') %>%
+      select(date, author, id, words, affin, affin_nrm, bing)
+   
+   return(sentiment_per_comment)
+}
+
+```
+
+```{r}
+
+# compute bigrams
+doge_tidy_bigrams <- corpus.tokenize_dfmTidy(doge_corpus, 
+                                          spell_checking = TRUE, 
+                                          mode_correction = 0, 
+                                          ngrams=2)
+
+doge_clean_tidy_bigrams <- corpus.clean_tidy(doge_tidy_bigrams$tidy,
+                                                     ngrams = 2)
+remove(doge_tidy_bigrams)
+```
+
+
+```{r}
+# sentiment per comment 
+sent_per_comm_dogeBi <- corpus.compute_sentiment_per_comment(doge_clean_tidy_bigrams, doge_df)
+
+```
+
+Da questa funzione ci viene restituito un tabella contente le variabili descrittive per identificare l'id di ogni comment, i bigrammi per ogni id e l'insieme di valori che identificano il sentimento. 
+
+Proviamo quindi a raggruppare e conteggiare i bigrammi per commento. 
+
+```{r}
+Bi_per_id <- sent_per_comm_dogeBi %>% 
+   group_by(id) %>%
+   count()
+
+max(Bi_per_id$n)
+
+
+sent_per_comm_dogeBi = sent_per_comm_dogeBi %>% inner_join(Bi_per_id, by = "id")
+
+```
+
+```{r}
+
+sigmoid <- function(x) {
+   sig = 1 / (1 + exp(-{{x}}))
+   return(sig)
+}
+
+fatt <- function(x){
+    ifelse(x == 1, 1, x * fatt(x-1))
+}
+
+polarity <- function(pos, neg, neut){
+   
+}
+
+remove(doge_df)
+remove(doge_clean_tidy_bigrams)
+
+         
+
+over_time_sentiment <- sent_per_comm_dogeBi %>%
+         count(bing, id) %>%
+   # aggregate split with count of sentiment
+         spread(bing, n, fill = 0) %>%
+   # for each comment pos, neg, neut count 
+         mutate(polarity = (positive + neutral*0.4) - (negative + neutral*0.6)) %>%
+   # if pol is neg -> neg 
+         mutate(polarity = as.numeric(polarity)) %>%
+   # dimension of comment (bigrams count) 
+         rowwise() %>%
+         mutate(dim = sum(positive, negative, neutral)) %>%
+   # moltiplichiamo la polarità per il fattoriale di dimensione+1 e dividiamo per la dimensione
+   # In questo modo i commenti con maggior numero di bigrammi avrà un peso molto maggiore agli altri
+         mutate(polarity_dim = as.double(polarity) * fatt(dim+1) / dim ) %>%
+   # standardizziamo tra [0,1] e [-1, 1]
+         mutate(polarity_sig_dim = sigmoid(polarity_dim)) %>%
+         mutate(polarity_tan_dim = tanh(polarity_dim)) %>%
+         mutate(polarity_sig = sigmoid(polarity)) %>%
+         mutate(polarity_tan = tanh(polarity))
+
+```
+
+```{r}
+
+color_plot <- function(x){
+   ifelse(x >= 0.5, 'green3', 
+          ifelse( x <= - 0.5, 'orangered2', 'grey'))
+}
+
+plot_year_sentiment<- function(data, in_year, cols){
+     plot <- data %>%
+         mutate(year = year(date)) %>%
+         filter(year == in_year) %>%
+         mutate(month = month(date)) %>%
+         mutate(dayMonth = as.numeric(day(date))) %>%
+         mutate(col =  color_plot({{cols}})) %>%
+        ggplot(aes(dayMonth, {{cols}}, color= col )) +
+        geom_col() +
+        #geom_smooth(method = "loess", se = FALSE, aes(color='black')) +
+        #geom_smooth(method = "lm", se = FALSE, aes(color='steelblue1') ) +
+        facet_grid(facets = month ~ ., margins = FALSE)+
+        #scale_y_continuous(trans = scales::pseudo_log_trans()) +
+        theme_minimal() + theme(plot.title = element_text(size = 11),
+                                axis.text.x = element_blank(), 
+                                axis.text.y.left = element_blank(),
+                                legend.position = 'none')+
+        xlab(NULL) + ylab(NULL) +
+        ggtitle("Polarity Over Time")
+     
+     print(plot)
+}
+
+```
+
+
+Utilizziamo un grafico ad istogramma per visualizzare le distribuzioni di frequenza delle polarity, così da capire come visualizzare l'informazione. 
+
+```{r}
+head(over_time_sentiment, 5)
+
+# dist of polarity values
+hist(over_time_sentiment$polarity)
+
+# normalize with tanh
+hist(over_time_sentiment$polarity_sig)
+
+# normalize with sigmoid 
+hist(over_time_sentiment$polarity_tan)
+```
+
+
+Utilizzando la formula per tenere conto anche della dimensione del commento, abbiamo delle variazione nel valore numerico della polarità, ma le classi positivo-negativo-neutro identificate dagli intervalli, rispettivamente [0.5, 1], [-0.5, 0.5] e [-1, 0.5] rimangono invariate. 
+
+
+```{r}
+hist(over_time_sentiment$polarity_dim)
+
+# normalize with tanh
+hist(over_time_sentiment$polarity_sig_dim)
+
+# normalize with sigmoid 
+hist(over_time_sentiment$polarity_tan_dim)
+```
+
+Uniamo il dataset con le misure di polarità con il dataframe contenente la coppia data e id. In questo modo possiamo andare a visualizzare l'andamento delle polarità in relazione al tempo, e successivamente 
+
+```{r}
+# re-join date 
+
+over_time_sentiment_date <- over_time_sentiment %>% 
+   inner_join(sent_per_comm_dogeBi, by = "id") %>%
+   distinct(id, .keep_all = TRUE) %>%
+   select(date, id, polarity, polarity_tan, polarity_tan_dim)
+
+```
+
+```{r}
+plot_year_sentiment(over_time_sentiment, "2020", polarity_tan)
+```
+
+```{r}
+
+plot_year_sentiment(over_time_sentiment, "2021", polarity_tan)
+
+```
+
+#### Average Sentiment Polarity for each comment 
+
+
+
+#### Comparison with an advanced tools for sentiment analysis on social media 
+
+
+##### Textdata Library
+
+Riscontrando molte problematiche dovute ai testi del social media e al limitato vocabolario per la sentiment analysis si è deciso di approfondire le tecniche utilizzate in letteratura. Si è trovato questo articolo del 2020 riguardante un analisi fatta su Twitter riguardo il tema Bitcoin, in cui viene utilizzata una nuova tecnica chiamata VADER.  
+
+Si è quindi provato ad utilizzarla su un sottoinsieme del dataset. 
+
+VADER-Sentiment-Analysis
+
+VADER ( Valence Aware Dictionary for Sentiment Reasoning) is a model used for text sentiment analysis that is sensitive to both polarity (positive/negative) and intensity (strength) of emotion. It is available in the NLTK package and can be applied directly to unlabeled text data.
+
+VADER sentimental analysis relies on a dictionary that maps lexical features to emotion intensities known as sentiment scores. The sentiment score of a text can be obtained by summing up the intensity of each word in the text.
+
+For example- Words like ‘love’, ‘enjoy’, ‘happy’, ‘like’ all convey a positive sentiment. Also VADER is intelligent enough to understand the basic context of these words, such as “did not love” as a negative statement. It also understands the emphasis of capitalization and punctuation, such as “ENJOY”
+
+```{r}
+
+library(vader)
+
+colnames(doge_df)
+
+df_for_vader <- doge_df %>%
+   mutate(year = year(date)) %>%
+   mutate(month = month(date)) %>%
+   filter(year == "2021", 
+          month == 2) %>%
+   head(10)
+
+
+
+df_for_vader %>%
+   head(2) %>%
+   mutate(scores = list(get_vader(df_for_vader$body))) %>%
+   unnest(scores)
+
+
+
+```
+
 

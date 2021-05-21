@@ -73,26 +73,17 @@ install.packages("renv")
 Initialise renv and restore: 
 
 ```r
-renv::init()
+# renv::init()
 renv::restore()			# if file .lock exist 
 ```
 
+###### Install ALL Packages 
+
+Go to install.pack.R files. 
+With Pycharm choos 0-Cloud Mirror. 
 
 
-###### Spacy Set Up
 
-In R Interactive, with conda installed: 
-
-```r
-install.packages("spacyr")
-
-library(reticulate)
-library(spacyr)
-
-spacy_install()
-conda_list()		# see if spacy_condaenv was created 
-spacy_initialize()
-```
 
 
 
@@ -114,3 +105,17 @@ Open branches for future improvements:
 - aws -- use AWS for continuously extract data
 - spacy -- improve dictionary
 
+###### Spacy Set Up
+
+In R Interactive, with conda installed: 
+
+```r
+install.packages("spacyr")
+
+library(reticulate)
+library(spacyr)
+
+spacy_install()
+conda_list()		# see if spacy_condaenv was created 
+spacy_initialize()
+```

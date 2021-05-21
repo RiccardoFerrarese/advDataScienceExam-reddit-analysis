@@ -85,7 +85,7 @@ plot_com_per_date <- function(dataset){
    df_date <- dataset %>%
       select(created_utc, link_id) %>%
       group_by(link_id) %>% 
-      mutate(date = as.Dzate(as_datetime(created_utc)))
+      mutate(date = as.Date(as_datetime(created_utc)))
       
    
    df_date%>%
@@ -125,6 +125,10 @@ doge_com <- sub_per_date %>%
           
 ```
 
+
+RANKING UTENTI ??
+UPVOTE ???
+NUMBER OF INTERACTION ?? 
 
 
 ```{r net_func}
@@ -334,10 +338,11 @@ compute_sentiment_per_comment <- function(tidy_clean_bigrams, data_txt){
             mutate(id = as.integer(document)) %>%
             select(id, words, affin_nrm, bing)
 
-   sentiment_per_comment <- data_txt %>%
-      inner_join(doge_txt, by='id') %>%
+   sentiment_per_comment <- sentiment_per_doc %>%
+      inner_join(data_txt, by='id') %>%
       select(date, author, id, words, affin_nrm, bing)
    
+   return(sentiment_per_comment)
 }
 
 
@@ -351,6 +356,8 @@ std_nrm <- function(x){
    norm <- (x - mean)/std
    return(norm)
 }
+
+
 
 over_time_sentiment <- sentiment_per_comment %>%
          count(bing, date) %>%
@@ -376,8 +383,9 @@ plot_year_sentiment<- function(data, in_year){
         facet_grid(facets = month ~ ., margins = FALSE)+
         scale_y_continuous(trans = scales::pseudo_log_trans()) +
         theme_minimal() + theme(plot.title = element_text(size = 11),
+                                axis.text.x = element_blank(), 
+                                axis.text.y.left = element_blank(),
                                 legend.position = 'none')+
-        xlab(NULL) + ylab(NULL) +
         ggtitle("Polarity Over Time")
      
      print(plot)
