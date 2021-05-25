@@ -189,15 +189,11 @@ word.manipulation <- function(data, word1, word2, word3, mode = 0, ngrams = 1){
    
 }
 
-## tokenize corpus and make document-feature matrix (DFM + TIDY)
-# data :: text corpus 
-# stop :: bool for remove stop word
-# ngrams :: {1,2,3} for compute corpus on ngrams
-corpus.tokenize_dfmTidy <- function(data, stop=TRUE, spell_checking = FALSE, mode_correction = 0, ngrams=1){
+corpus.tokenize_dfmTidy <- function(data, remove_stop=TRUE, spell_checking = FALSE, mode_correction = 0, ngrams=1, dfm_b=TRUE){
    
    # if stopword .. 
    # build toks  
-   if(stop){
+   if(remove_stop){
       toks <- quanteda::tokens_select(
          quanteda::tokens(data,
                           remove_punct = TRUE, 
@@ -226,6 +222,9 @@ corpus.tokenize_dfmTidy <- function(data, stop=TRUE, spell_checking = FALSE, mod
          toks <- tokens_replace(toks, dic_words, correct, case_insensitive = TRUE)
       } else if( mode_correction == 1){
          # correct all words with first hunspell's suggestion
+      } else if( mode_correction == 2){
+         # vader 
+         
       }
    }
    
@@ -239,7 +238,12 @@ corpus.tokenize_dfmTidy <- function(data, stop=TRUE, spell_checking = FALSE, mod
    }
    
    # return dfm and tidy 
-   return(list(dfm = dfm, tidy = tidy(dfm)))
+   
+   rtn <- list(tidy = tidytext::tidy(dfm))
+   if(dfm_b){
+      rtn <- list(tidy = tidytext::tidy(dfm), dfm=dfm)
+   }
+   return(rtn)
 }
 
 ## function for clean data and separate ngrams 
@@ -324,7 +328,7 @@ corpus.countPlot_tidy <- function(data, threshold_count=1000, threshold_freq=0.0
       plot_freq <- word_counts %>%
          filter( frequency > threshold_freq) %>%
          ggplot(aes(words, frequency)) + 
-         geom_point(alpha = 0.3, size = 1.5, width = 0.25, height = 0.1) + 
+         geom_point(alpha = 0.3, size = 1.5) + 
          geom_text(aes(label = words), check_overlap = TRUE, vjust = 1) + 
          theme_classic() + 
          theme(axis.text.x=element_blank()) 
@@ -333,7 +337,7 @@ corpus.countPlot_tidy <- function(data, threshold_count=1000, threshold_freq=0.0
       plot_count <- word_counts %>%
          filter( count > threshold_count) %>%   
          ggplot(aes(words, count)) + 
-         geom_point(alpha = 0.3, size = 1.5, width = 0.25, height = 0.1) + 
+         geom_point(alpha = 0.3, size = 1.5) + 
          geom_text(aes(label = words), check_overlap = TRUE, vjust = 1) + 
          scale_y_log10() + 
          theme_classic() + 
