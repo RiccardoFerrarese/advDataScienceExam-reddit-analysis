@@ -14,6 +14,9 @@ LaTeX: pdfLaTeX
 
 AutoAppendNewline: Yes
 
+QuitChildProcessesOnExit: Yes
+DisableExecuteRprofile: Yes
+
 MarkdownReferences: Document
 
 PythonType: system
