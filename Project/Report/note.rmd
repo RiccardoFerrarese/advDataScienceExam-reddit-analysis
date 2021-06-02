@@ -1030,7 +1030,7 @@ Questa crypto-moneta ha avuto molto successe dal momento in cui una grossa comun
 
 Come prima cosa scarichiamo i dati riguardanti il subreddit da analizzare.
 
-```{r}
+```{r eval = FALSE}
 
 path='doge_com_raw_data'
 if(!(exists(path))){
@@ -1047,7 +1047,7 @@ remove(doge_com_raw_data)
 Facciamo un summary dei dataframe per venderne il contenuto: 
 
 ```{r}
-# if(save){ data <- readRDS("../Data/dogecoin.rds") }
+if(save){ data <- readRDS("../Data/dogecoin.rds") }
 
 print_("REDDIT's COMMENT DF: ")
 data$df_comm %>%
@@ -2146,6 +2146,9 @@ remove(bigrams_sentiment)
 
 ### Comments per Time 
 
+Una volta che abbiamo associato i sentimenti ai bigrammi e fatto una prima analisi esplorativa del dominio, possiamo andare a vedere come si evolve il sentimento nel tempo e rapportarlo al numero di commenti effettuati e all'andamento del prezzo della moneta nel mercato. Si va quindi a visualizzare i grafici dell'andamento di numero di commenti per giornata sia del dataset complessivo, che del singolo anno 2021.
+
+
 ```{r timexcomment}
 data <- readRDS("../Data/dogecoin.rds")
 doge_df <- data$df_comm
@@ -2153,10 +2156,7 @@ doge_df <- data$df_comm
 
 
 remove(data)
-```
 
-
-```{r}
 plot_com_per_date <- function(dataset){
 
    df_date <- dataset %>%
@@ -2173,6 +2173,12 @@ plot_com_per_date <- function(dataset){
          xlab("Date") + 
          ylab("Number of Comment") + 
          scale_y_log10() + 
+         geom_vline(xintercept = as.Date('2020-07-01'), color = 'green3', size = 0.2) +
+         geom_vline(xintercept = as.Date('2021-01-01'), color = 'orangered1', size = 0.2) +
+         geom_vline(xintercept = as.Date('2021-02-01'), color = 'orangered1', size = 0.2) +
+         geom_vline(xintercept = as.Date('2021-03-01'), color = 'orangered1', size = 0.2) +
+         geom_vline(xintercept = as.Date('2021-04-01'), color = 'orangered1', size = 0.2) +
+         geom_vline(xintercept = as.Date('2021-05-01'), color = 'grey', size = 0.2) +
          theme_minimal()
 }
 
@@ -2181,18 +2187,7 @@ plot_com_per_date(doge_df)
 
 ```
 
-```{r 2021}
-doge_com_2021 <- doge_df %>%
-   filter( date > as.Date('2020-12-31'))
-
-plot_com_per_date(doge_com_2021)
-
-remove(doge_df)
-remove(doge_come_2021)
-```
-
-Possiamo identificare delle date in cui si sono verificati dei picchi di attività da parte degli utenti: 
-- Luglio 2020
+Possiamo identificare così i periodi di maggior attività degli utenti, 
 - Luglio 2020
 - Febbraio 2021
 - Aprile/Maggio 2021
@@ -2262,23 +2257,31 @@ dogeusd %>%
       ggplot(aes(x=Date, y=Low)) +
          geom_line( color = 'red', size = 0.3 ) +
          geom_line(aes(y = High), color = 'green4', size = 0.3) +
-         xlab("Date") + 
+         xlab("Date") + ylab("Low-High price")  +
          theme_minimal()
 
 dogeusd %>%
    mutate(Date = as.Date(Date)) %>%
    filter(month(Date) == "10" & year(Date) == "2020") %>%
    head(10)
-   
+
+
 ```
 
 Abbiamo dei picchi insoliti nel grafico, andando a cercare nel dataframe il mese corrispondente si sono trovate 3 date mancanti, 10-12-13 Ottobre 2020. Andiamo a rimuovere i valori null e a disegnare nuovamente il grafico. 
 
 
-```{r}
+```{r 2021}
 
-dogeusd %>%
+doge_com_2021 <- doge_df %>%
+   filter( date > as.Date('2020-12-31'))
+
+com2021 <- plot_com_per_date(doge_com_2021)
+
+
+plot <- dogeusd %>%
    mutate(Date = as.Date(Date)) %>%
+   filter( Date > as.Date('2020-12-31')) %>%
    filter( Open != "null") %>%
    select(Date, Low, High) %>%
    mutate(Low = as.double(Low)) %>%
@@ -2287,11 +2290,14 @@ dogeusd %>%
       ggplot(aes(x=Date, y=Low)) +
          geom_line( color = 'red', size = 0.3 ) +
          geom_line(aes(y = High), color = 'green4', size = 0.3) +
-         xlab("Date") + 
+         xlab("Date") + ylab("Low-High price") + 
          theme_minimal()
 
-
+print(plot + com2021)
+remove(plot, com2021, dogeusd, doge_com_2021)
 ```
+
+Troviamo delle somiglianze in questi grafici, bisognerebbe tener conto della giornata lavorativa o meno, o comunque all'attività storica degli utenti nel corso della settimana. Inoltre possiamo identificarlo come un evento non del tutto anormale, dal momento che arrivano molti utenti nuovi e vengono utilizzati slogan per invogliare le persone a comprare DOGE, più le persone discutono interagiscono attraverso i commenti più potrebbero esser portate a comprare o a vendere.
 
 #### Sentiment over Time
 
@@ -2404,14 +2410,16 @@ over_time_sentiment <- sent_per_comm_dogeBi %>%
    # dimension of comment (bigrams count) 
          rowwise() %>%
          mutate(dim = sum(positive, negative, neutral)) %>%
-   # moltiplichiamo la polarità per il fattoriale di dimensione+1 e dividiamo per la dimensione
+   # moltiplichiamo la polarità per il fattoriale di dimensione e dividiamo per la dimensione
    # In questo modo i commenti con maggior numero di bigrammi avrà un peso molto maggiore agli altri
-         mutate(polarity_dim = as.double(polarity) * fatt(dim+1) / dim ) %>%
+         mutate(polarity_dim =  as.double(polarity) / fatt(dim) ) %>%
    # standardizziamo tra [0,1] e [-1, 1]
          mutate(polarity_sig_dim = sigmoid(polarity_dim)) %>%
          mutate(polarity_tan_dim = tanh(polarity_dim)) %>%
          mutate(polarity_sig = sigmoid(polarity)) %>%
          mutate(polarity_tan = tanh(polarity))
+
+
 
 ```
 
@@ -2419,41 +2427,34 @@ Definiamo la funzione per eseguire il plot del sentimento diviso per anno e mese
 
 ```{r}
 
-color_plot <- function(x){
-   ifelse(x >= 0.5, 'green3', 
-          ifelse( x <= - 0.5, 'orangered2', 'grey'))
-   if(x >= 0.5){
-      col <- 'green3'
-   } else if( x <= -0.5){
-      col <-  'orangered2'
-   } else {
-      col <- 'grey'
-   }
-}
-
-plot_year_sentiment<- function(data, in_year, pol, lm=TRUE){
+plot_year_sentiment<- function(data, in_year, pol){
 
      df <- data %>%
          mutate(year_ = year(date)) %>%
          filter(year_ == in_year) %>%
          mutate(month = month(date)) %>%
          mutate(dayMonth = as.numeric(day(date))) %>%
-         mutate(col =  color_plot({{pol}})) 
+         mutate(color_ =  if_else( {{pol}} > 0.5, "green3", 
+                                   if_else( {{pol}} > - 0.5, "blue", "orangered2")) ) %>%
+         group_by(dayMonth, month) %>%
+         mutate(mean_per_day = mean({{pol}}))
+         
+     #df <- aggregate(polarity_tan~., df, FUN=mean)
         
       plot <- df %>%
-        ggplot(aes(dayMonth, {{pol}})) +
-        geom_col( aes(color= col )) +
-        #geom_line(aes(dayMonth, n)) +
+        ggplot() +
+        geom_col(aes(dayMonth, {{pol}},  color = color_)) +
+        geom_line(aes(dayMonth, mean_per_day), size = 0.1, color = 'black') +
         #geom_smooth(method = "loess", se = FALSE, aes(color='black')) +
 
         facet_grid(facets = month ~ ., margins = FALSE)+
-        #scale_y_continuous(trans = scales::pseudo_log_trans()) +
-        theme_minimal() + theme(plot.title = element_text(size = 11),
+        scale_y_continuous(trans = scales::pseudo_log_trans()) +
+        theme_minimal() + theme(plot.title = element_text(size = 10),
                                 axis.text.x = element_blank(), 
                                 axis.text.y.left = element_blank(),
-                                legend.position = 'none')+
-        xlab(NULL) + ylab(NULL) +
-        ggtitle("Polarity Over Time")
+                                legend.position = 'none') +
+        xlab(NULL) +
+        ggtitle("Sentiment Polarity Over Time")
      
     return(list(plot = plot, df = df ))
 }
@@ -2461,11 +2462,15 @@ plot_year_sentiment<- function(data, in_year, pol, lm=TRUE){
 ```
 
 
-Utilizziamo un grafico ad istogramma per visualizzare le distribuzioni di frequenza delle polarity, così da capire come visualizzare l'informazione. 
+Utilizziamo un grafico ad istogramma per visualizzare le distribuzioni di frequenza delle polarity, così da capire come visualizzare l'informazione. Possiamo anche notare come il numero di parole rimaste per ogni commento è veramente poco, si hanno la gran parte commenti composti da due parole e circa 1/6 con un numero di parole maggiore. 
 
 ```{r}
 head(over_time_sentiment, 5)
 
+hist(over_time_sentiment$dim)
+```
+
+```{r}
 # dist of polarity values
 h1 <- ggplot(over_time_sentiment) + 
    geom_histogram(aes(polarity)) + 
@@ -2512,28 +2517,71 @@ print(h1 + h2 + h3)
 remove(h1, h2, h3)
 ```
 
-Uniamo il dataset con le misure di polarità con il dataframe contenente la coppia data e id. In questo modo possiamo andare a visualizzare l'andamento delle polarità in relazione al tempo, e successivamente 
+Uniamo il dataset con le misure di polarità con il dataframe contenente la coppia data e id. In questo modo possiamo andare a visualizzare l'andamento delle polarità in relazione al tempo, e successivamente utilizzeremo questi dati nella costruzione della rete degli utenti. 
 
 ```{r}
 # re-join date 
-
-over_time_sentiment_id <- over_time_sentiment %>% 
+over_time_sentiment_join <- over_time_sentiment %>% 
    inner_join(sent_per_comm_dogeBi, by = "id") %>%
-   distinct(id, .keep_all = TRUE) %>%
-   select(date, id, polarity, polarity_tan, polarity_tan_dim)
+   select(date, id, polarity_tan, author) 
+remove(sent_per_comm_dogeBi)
+
+# date sentiment
+over_time_sentiment <- over_time_sentiment_join %>%
+   select(date, polarity_tan) %>% # polarity , polarity_tan_dim
+   group_by(date) %>%
+   summarise_at(vars(polarity_tan), funs(mean(., na.rm=TRUE)))
+
+# comment sentiment 
+sentiment_id <- over_time_sentiment_join %>%
+   select(id, polarity_tan) %>% # polarity , polarity_tan_dim
+   group_by(id) %>%
+   summarise_at(vars(polarity_tan), funs(mean(., na.rm=TRUE)))
+
+# author sentiment
+# replace na with 0 !! 
+sentiment_author <- over_time_sentiment_join %>%
+   select(author, polarity_tan) %>% # polarity , polarity_tan_dim
+   group_by(author) %>%
+   summarise_at(vars(polarity_tan), funs(mean(.)))
+
 
 ```
 
+Aggregato le polarità e facendone la media per ogni id presente nel dataset, possiamo andare a fare il plot per ogni singolo giorno dell'andamento della polarità. Si va inoltre a calcolare la polarità del sentimento medio per ciascun utente. 
+
 ```{r}
-plot_year_sentiment(over_time_sentiment_id, "2020", polarity_tan, lm=FALSE)
+p1 <- plot_year_sentiment(over_time_sentiment, "2020", polarity_tan)    # date sentiment mean
+
+# p1$df %>%
+#    filter( polarity_tan > 0)
+
+print(p1$plot)
 ```
-L'aggregarsi di tanto sentimento 
 
-Andiamo a confrontare il sentimento dei commenti del 2021 con l'andamento del prezzo del Dogecoin.
+Questo primo grafico ci fa vedere in media la polarità del sentimento giornaliero (stando attenti a non confondersi con i colori che risultano sbagliati nella visualizzazione ma corretti nel dataframe) si ha in generale una polarità positiva, questo ci indica come in genere ci sia un basso numero di commenti con polarità negativa. 
+
+Si va poi a visualizzare il numero di commenti tra tre diverse polarità per ogni giornata e mese. 
+
+```{r}
+p2 <- plot_year_sentiment(over_time_sentiment_join, "2020", polarity_tan)  
+print(p2)
+```
+```{r}
+print(p1$plot + p2$plot)
+remove(p1, p2)
+```
+Si può notare come nel periodo in cui ci sono stati sia tanti commenti positivi che tanti commenti negativi, il valore medio della polarità risulta il più "neutrale" rispetto gli altri mesi. 
+
+L'aggregarsi di tanto sentimento nel mese di Luglio può corrispondere anche ad una semplice maggior attività degli utenti e quindi un maggior numero di commenti come visto nel primo grafico della sezione. 
+
+Andiamo a confrontare il sentimento dei commenti del 2021 con l'andamento del prezzo del Dogecoin. Anche qui il numero di commenti, il sentimento espresso in essi e il valore di dogecoin sul mercato sembrano essere correlati. 
 
 
 ```{r}
-s <- plot_year_sentiment(over_time_sentiment_id, "2021", polarity_tan)
+dogeusd <- read.csv("../Data/DOGE-USD.csv")
+
+s <- plot_year_sentiment(over_time_sentiment_join, "2021", polarity_tan)
 
 p <- dogeusd %>%
    mutate(Date = as.Date(Date)) %>%
@@ -2548,13 +2596,14 @@ p <- dogeusd %>%
          geom_line(aes(y = High), color = 'green4', size = 0.3) +
          facet_grid(facets = month ~ ., margins = FALSE)+
          xlab("Date") + 
-         ylab("") + 
+         ylab("Polarity") + 
          ggtitle("2021 - price of DOGE") +
          theme( plot.title = element_text(size = 9) , 
                 axis.text.y = element_blank()) +
          theme_minimal()
 
 print(s$plot + p)
+remove(s, p)
 ```
 
 
@@ -2573,7 +2622,7 @@ VADER sentimental analysis relies on a dictionary that maps lexical features to 
 
 For example- Words like ‘love’, ‘enjoy’, ‘happy’, ‘like’ all convey a positive sentiment. Also VADER is intelligent enough to understand the basic context of these words, such as “did not love” as a negative statement. It also understands the emphasis of capitalization and punctuation, such as “ENJOY”
 
-```{r}
+```
 data <- readRDS("../Data/dogecoin.rds")
 doge_df <- data$df_comm
 
@@ -2630,45 +2679,58 @@ data_score <- data %>%
    distinct( author, date, body, parent_id, link_id, .keep_all= TRUE) %>%
    select(id, score, author)
 
+remove(data)
 ```
 
+Si va a calcolare lo score medio per ogni utente in modo da avere un'informazione in più per la costruzione della rete. 
 
 ```{r}
+## MEAN SCORE FOR EACH USER 
 
-time_sent_aut <- over_time_sentiment_id %>%
-   inner_join(data_score, by = "id",) %>%
-   group_by(id) %>%
-   select(id, author, polarity_tan, score)
+mean_score_usr <- aggregate(score ~ author, data_score, FUN = mean ) %>%
+   mutate( score_nrm = range01(score) )
+head( mean_score_usr %>% arrange(-score), 5)
 
-# verify if id correspond to original data 
-# 2020-02-17	carclain	2
-time_sent_aut %>%
-   filter(id = 2)
-
-
-mean(time_sent_aut$score)
-min(time_sent_aut$score)
-max(time_sent_aut$score)
 ```
 
+Per facilitare la visualizzazione andiamo ad aggiungere una variabile fattore al dataframe contenente autore e sentimento a lui associato. Aggiungendo questa variabile ci permette di classificare in tre gruppi gli utenti: quelli che in generale si esprimono con un sentimento positivo, chi si esprime in maniera neautra e invece chi prende una posizione in genere negativa. Prima di fare ciò si fa a sostituire tutti i valori non definiti per i sentimenti con il valore 0. 
+
 ```{r}
+head(sentiment_author, 3)
 
-time_sent_aut_score <- time_sent_aut %>%
-   distinct(id, author, .keep_all = TRUE) %>%
-   mutate(score_nrm = sigmoid(score))
+sentiment_author <- sentiment_author %>%
+   mutate(polarity_tan = if_else(is.na(polarity_tan), 0, polarity_tan))
 
+   
 remove(data_score)
-remove(time_sent_aut)
-remove(over_time_sentiment_id)
-# histogram for visualize distribution for: 
-# - orginal scor 
-# - 
-hist(time_sent_aut$score)
-hist(time_sent_aut_score$score_nrm)
-hist(time_sent_aut_score$polarity_tan)
-
-write.csv(time_sent_aut_score, "../Data/usr_sent_score.csv")
 ```
+
+Visualizziamo la distribuzione degli score e dei sentimenti relativi agli utenti. 
+
+```{r}
+
+# dist of polarity values
+h1 <- ggplot(mean_score_usr) + 
+   geom_histogram(aes(score)) + 
+   theme_minimal()
+
+# normalize with sigmoid
+h2 <- ggplot(mean_score_usr) + 
+   geom_histogram(aes(score_nrm)) + 
+      ylab("") + xlab("log(score_nrm)") +
+   scale_y_log10() + 
+   theme_minimal()
+
+
+print(h1 + h2)
+remove(h1, h2)
+
+# write.csv(mean_score_usr, "../Data/usr_sent_score.csv")
+remove(time_sent_aut_score)
+```
+
+
+#### Build the Users Network
 
 - ARCHI = RELAZIONE DI TIPO COMMENTO NON DIREZIONALE 
 - ARCHI COLORATI PER POLARITA 
@@ -2677,8 +2739,6 @@ write.csv(time_sent_aut_score, "../Data/usr_sent_score.csv")
 Per costruire le relazioni tra gli utenti si è utilizzato il dato _link\_id_, che permette di indentificare le discussioni all'interno di ogni submit post ( _parent\_id_ ).
 
 ```{r user-top-extract}
-
-
 # data must have cols : (created_utc, author, link_id )
 # dataf : source dataset
 # file_name: name for save network tidy data 
@@ -2704,7 +2764,7 @@ compute_top_usr_net <- function(dataf, file_name, num_usr){
    
    # take usr with most comment
    top_usr_info <- dataf %>%
-      select(author, link_id, id) %>%
+      select(author, id, link_id) %>%
       filter( author %in% top_usr$author)
 
    # join for track interaction between most "top" usr 
@@ -2717,7 +2777,10 @@ compute_top_usr_net <- function(dataf, file_name, num_usr){
    write.csv(net_top_usr, file=file_name,
           row.names=FALSE)
    
-   return(top_usr_info)
+   nodes <- top_usr_info %>%
+      distinct(author)
+   
+   return(list(nodes=nodes, edges=net_top_usr))
 }
 
 
@@ -2726,56 +2789,65 @@ compute_top_usr_net <- function(dataf, file_name, num_usr){
 
 ```{r}
 
-top_usr_25 <- compute_top_usr_net(doge_df, "../Data/top_usr_25.csv", 25)
-
-top_usr_10 <- compute_top_usr_net(doge_df, "../Data/top_usr_10.csv", 10)
-
-top_usr_100 <- compute_top_usr_net(doge_df, "../Data/top_usr_100.csv", 100)
+net10usr <- compute_top_usr_net(doge_df, "../Data/top_usr_10.csv", 10)
 
 ```
 
 Attraverso questa costruzione del dataset, abbiamo messo in relazione autori che si sono commentati a vicenda in modo da poter valutare ciascun commento con il suo sentimento e allo stesso tempo classificare ogni utente in base allo score medio. Per motivi di grandezza computazionale, si è scelto di prendere in esame gli utenti con il maggior numero di commenti scritti nel subreddit.
 
-```{r}
+Dobbiamo però aggiungere le informazioni relative al sentimento per ciascun link_id e lo score per ciascun utente. 
 
-usr_net_25 <- read.csv("../Data/top_usr_25.csv")
-
-head(usr_net_25, 3)
-
-
-```
-Andiamo quindi a sostituire ogni id con il corrispondente sentimento calcolato precedentemente. 
 
 ```{r}
+head(net10usr, 3)
 
-score_usr_sent <- read.csv("../Data/usr_sent_score.csv")
+nodes <- net10usr$nodes
+edges <- net10usr$edges
 
-top_usr_25 %>%
-   inner_join(score_usr_sent) %>%
-   group_by(link_id)
 ```
+Per ciascun nodo abbiamo che la coppia link_id - id identifica ciascun commento di quell'autore. 
+
+```{r}
+
+# join mean score and sentiment with user
+nodes_ <- nodes %>%
+   inner_join(mean_score_usr, by="author") 
+  
+nodes_ <- nodes_ %>%
+   left_join(sentiment_author, by = "author") %>%
+   mutate(polarity_tan = if_else(is.na(polarity_tan), 0, polarity_tan)) %>%
+   select(author, polarity_tan, score_nrm)
+
+# join sentiment with edges with id and link id for each pairs user-id
+   
+```
+
+
 Per costruire la relazione sentimento per ogni coppia di utenti si va a fare una media della polarità tra il commento di un utente e l'altro. In questo modo abbiamo che ogni arco rappresenta una relazione 'hanno commenti adiacenti' pesato dalla polarità di essi. Inoltre per ogni utente oltre ad andare a calcolare una misura di centralità abbiamo anche il dato 'score' che identifica il punteggio che il commento ha ricevuto tra upvote e downvote. 
 
 
 ```{r net_doge}
-usr_net_25 %>% rename(
-   from = author.x, 
-   to = author.y, 
+
+edges_ <- edges %>% rename(
+   from = author.x,
+   to = author.y,
    post_id = link_id,
 )
 
-graph_topcom_doge <- usr_net %>% 
-   as_tbl_graph()
+graph <- tbl_graph(nodes = nodes_, edges = edges_)
 
-graph_topcom_doge %>% 
+```
+
+```{r}
+graph %>% 
    activate(nodes) %>%
    # compute centrality 
    mutate(eigenv = centrality_eigen()) %>%
    activate(edges) %>%
    mutate(betweenness = centrality_edge_betweenness()) %>%
    ggraph(layout='kk') +
-      geom_edge_link(aes(colour = link_id),  show.legend = FALSE) + # width=betweenness
-      geom_node_point(aes(size = eigenv, alpha = eigenv), colour = 'blue' ) + 
+      geom_edge_link(aes(colour = post_id),  show.legend = FALSE) + # width=betweenness
+      geom_node_point(aes(size = eigenv, alpha = score), colour = 'blue' ) + 
       geom_node_text(aes(label = name),  repel = TRUE)
 
 ## non calcolo il pagerank essendo un grafo indiretto 
