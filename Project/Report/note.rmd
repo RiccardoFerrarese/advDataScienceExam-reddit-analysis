@@ -38,7 +38,7 @@ print_ <- function(string){ paste0("\n", string, "\n") %>% cat()}
 
 ## Introduction
 
-Questo progetto ha come principale obiettivo l'analisi del testo di grandi dataset creati a partire dai commenti di diverse comunità della piattaforma social Reddit in questo ultimo anno e mezzo.
+Questo progetto ha come principale obiettivo l'analisi del testo di grandi dataset creati a partire dai commenti di questo ultimo anno e mezzo di diverse comunità della piattaforma social Reddit.
 
 Il report è strutturato in modo tale da seguire l'ordine di esecuzione del codice, in modo da gestire al meglio gli oggetti nell'ambiente di Rstudio, che altrimenti rischierebbero di saturare la memoria a disposizione della macchina virtuale istanziata da R per memorizzare gli oggetti ([memory limit](https://search.r-project.org/R/refmans/base/html/Memory-limits.html)). Inoltre, alcuni chunck contenenti la rimozione degli oggetti in memoria non sono stati visualizzati sul report finale. 
 
@@ -53,13 +53,16 @@ Le comunità scelte per l'analisi riguardano il tema delle crytpovalute. Sono st
 
 Prima di iniziare la discussione del lavoro, si elencano quelle che sono state le domande principali poste una volta scelto il dominio per l'analisi: 
 
-- Chi sono gli utenti maggiormente attivi e che interazioni ci sono fra di essi? 
+- Chi sono gli utenti maggiormente attivi
+
+- Quali sono le parole e i bigrammi più utilizzati? 
+
+- Ci potrebbe essere una relazione tra i sentimenti dei commenti e gli eventi sociali/economici relativi hai ai temi?
  
-- Gli utenti più attivi che tipo di commenti scrivono? 
+- Gli utenti più attivi possono esser considerati affidabili? 
 
 - Tra le diverse comunità c'è una differenza nel modo di esprimersi e negli argomenti trattati? 
 
-- Ci potrebbe essere una relazione tra i sentimenti dei commenti e gli eventi sociali/economici relativi hai ai temi?
 
 
 
@@ -125,7 +128,7 @@ library(quanteda.textstats)
 
 Per installare l'ambiente necessario ad eseguire lo script in python e per eseguire l'analisi in R è consigliato installare un ambiente con conda. 
 
-Se eventualmente si vuole salvare i dataframe parziali di certe operazioni, come oggetti RDS, è necessario impostare la seguente variabile a TRUE. In qualsiasi caso il codice è stato scritto in modo tale da non rendere obbligatorio il salvataggio dei dati. 
+Se eventualmente si vuole salvare i dataframe parziali di certe operazioni, come oggetti RDS, è necessario impostare la seguente variabile a TRUE. In qualsiasi caso la prima parte di codice , fino all'analisi del sentimento nel tempo è eseguibile senza necessariamente salvare i dati; per la parte finale è necessario avere dello spazio libero per memorizzare i dati. 
 
 
 ```{r}
@@ -136,18 +139,15 @@ Lo spazio di memoria occupato da tutti gli oggetti salvati è pari a tot GB.
 
 ## Reddit 
 
-Reddit, a differenza della maggior parte dei social-network maggiormente utilizzati, non presenta un meccanismo per scegliere una cerchia di utenti con cui interagire (per intenderci,  i followers su Twitter o Instagram), tuttavia il modo in cui è organizzato permette all'utente di interagire in diversi forums, ognuno di uno specifico argomento, nel quale interagirà con gli altri utenti che 'seguo' lo stesso _subreddit_. Inoltre sulla pagina generale si possono trovare i post più popolari di tutta la piattaforma. 
+Reddit, a differenza della maggior parte dei social-network maggiormente utilizzati, non presenta un meccanismo per scegliere una cerchia di utenti con cui interagire (per intenderci,  i followers su Twitter o Instagram), tuttavia il modo in cui è organizzato permette all'utente di interagire in diversi forums, ognuno su uno specifico argomento, nel quale interagirà con gli altri utenti con lo stesso interesse. Inoltre sulla pagina generale di Reddit si possono trovare i post più popolari di tutta la piattaforma. 
 
 Si può definire Reddit come un _social-network aggregator_, cioè è una piattaforma di discussione in cui gli utenti possono discutere o condividere informazioni, suddivisa in forums di specifici argomenti chiamati **subreddits**. 
 
-Ogni utente può eseguire un numero illimitato di interazioni con la piattaforma, dove le interazioni possono essere la scrittura di un post in uno specifico subreddit, commentare post e interazioni di altri utenti o esprimere la propria preferenza relativa a un certo post o commento. Se un certo post (a meno che non sia di un subreddit privato)  riceve molti _downvotes_ immediatamente crollerà sulla 'classifica dei post' e scoparirà dalla vista degli altri utenti. Al contrario se acquisisce una certa importanza potrà esser visualizzato nella pagina generale di reddit e raggiungendo così un numero maggiore di utenti. 
+Ogni utente può eseguire un numero illimitato di interazioni con la piattaforma, dove le interazioni possono essere la scrittura di un post in uno specifico subreddit, commentare post o esprimere la propria preferenza relativa a un certo post o commento. Se un certo post (a meno che non sia di un subreddit privato) riceve molti _downvotes_ immediatamente crollerà sulla 'classifica dei post' e scoparirà dalla vista degli altri utenti. Al contrario se acquisisce una certa importanza potrà esser visualizzato nella pagina generale di reddit e raggiungendo così un numero maggiore di utenti.  
 
-Un ulteriore particolarità di questa piattaforma è che gli utenti sono allo stesso modo creatore di contenuti, consumatori e curatori delle informazioni in esso. Utilizza infatti un sistema a punteggio, tramite _upvotes_ e _downvotes_ da parte degli utenti, per determinare i contenuti e le discussioni con maggior interesse e che verrano mostrati nei primi contenuti della pagina. 
+Un ulteriore particolarità di questa piattaforma è che gli utenti sono allo stesso modo creatori di contenuti, consumatori e curatori delle informazioni stesse. Utilizza infatti un sistema a punteggio, tramite _upvotes_ e _downvotes_ da parte degli utenti, per determinare i contenuti e le discussioni con maggior interesse.. 
 
 Pur permettendo agli utenti di mantenere l'anonimicità utilizzando un nome utente a piacere, Reddit tiene traccia di tutte le attività di ogni profilo inclusi i post e i commenti effettuati. 
-
-
-
 
 
 ## Collect Data with Python
@@ -282,65 +282,28 @@ time: 194798997.85995483 ~~ 3.25 h
 
 
 
-## Overview of Datasets
-
-Alcune osservazioni sui dati: 
-
-- tutti i dati testuali fanno parte di commenti scritti da persone su un social network
-
-- si hanno un enorme quantità di parole scritte male o senza significato 
-
-- le regex non sono sufficienti 
-
-- hunspell 
-
-
-
 ## Text Analysis 
 
+Per affrontare l'analisi del testo è neccessario avere un ogetto detto _corpus_ con cui vengono rappresentati tutti i documenti (commenti o post nel nostro caso di studio) dei dati raccolti. 
+Un altro oggetto che può esser molto utile nell'analisi è la _document features matrix_  dove ogni colonna rappresenta un termine o token estratto e come righe i conteggi di frequenza di essi relativi ad ogni documento. 
 
-### Pipeline and objects for analysis
+Si andrà a definire delle funzioni per la manipolazione e analisi del testo, in modo da poterle riutilizzare in diverse sezione del report. Prima di fare ciò andiamo però a descrivere quale sarà la _pipeline_ di lavoro. 
 
-Per la parte di analisi del testo 
-```
-Object for Analysis
-- corpus: --def of copurs
-. dfm: --def of dfm 
-- tokens; .. def of tokens
+Partendo dai dati grezzi estratti tramite lo script in Python, sarà necessario andare a creare gli oggetti utili all'analisi del testo per poi tokenizzare i termini o i bigrammi nel testo in modo da potere manipolarli, correggerli e analizzarli.
 
-Functions for Analysis
-- corpus.* works if word.* function for create some dataFrame, clean and counts word/ngrams
-- df.* is for the first step of each analysis 
 
-From RawData -> to DataFrame + Comment_Corpus 
+![](./data-report/advds1.png)
 
-From Comment_Corpus -> to DFM + TIDY for each n-grams {1,2,3}
-   toks with or without stop word 
-   apply stemming or lemmatization 
-   
-From DataFrame -> Post_Corpus
-   todo: topic analysis
-   
+Potendo aggregare i singoli commenti come contenuto di un post, si è arrivati ad avere due dataset con gli stessi corpus ma con un indicizzazione dei documenti differente. 
 
---> return clean df for ngrams 
+I corpus di testo aggregati, cioè appartenenti ad uno stesso post, verranno utilizzati per la topic analysis in modo da classificare i topic per ciascun post e non per ciascun commento. 
 
-from tidy : 
-FROM Count & Plot -> to : 
-               - Sentiment Class
-               - Words Sentiment
-               - Words Net
-
-from dfm: 
-   - test stats quanteda 
-   - wordcloud quanteda 
-
-```
-
+![](./data-report/advds2.png)
 
 
 ### Quanteda Library 
 
-**Quanteda** è pacchetto per R per manipolare e analizzare dati testuali in formato non-tidy, sviluppata da Kenneth Benoi, Kohei Watanabe e altri contributors. Definisce una serie di funzioni per applicare processi di NLP (Natural Language Processing) a partire da testi di qualsiasi tipo o documenti, fino all'analisi finale. 
+**Quanteda** [@quanteda] è pacchetto per R per manipolare e analizzare dati testuali in formato non-tidy, sviluppata da Kenneth Benoi, Kohei Watanabe e altri contributors. Definisce una serie di funzioni per applicare processi di NLP (Natural Language Processing) a partire da testi di qualsiasi tipo o documenti, fino all'analisi finale. 
 
 Una funzionalità molto utile di questo pacchetto è l'esecuzione in multi-threading delle sue funzioni. Si possono definire il numero di threads da utilizzare all'interno della funzione _quanteda_options_, altrimenti vengono impostati al valore di default che corrisponde a: 
 
@@ -2066,7 +2029,7 @@ remove(dff)
 Tra le parole più presenti, oltre a doge, possiamo notare parole come: 
 - buy
 - hold
-- moon
+- moon, per il motto _'doge to the moon'_
 - invest/keep
 
 
@@ -2143,11 +2106,90 @@ remove(bigrams_class_sentiment)
 remove(bigrams_sentiment)
 ```
 
+### Topic Analysis 
+
+Per eseguire l'analisi degli argomenti siamo andati a considerare come un unico testo tutti i commenti di uno stesso post. 
+
+```{r, crop=TRUE}
+
+data <- readRDS("../Data/dogecoin.rds")
+doge_corpus <- data$corpus_post
+remove(data)
+
+# remove stopwords!!              
+doge_tidy <- corpus.tokenize_dfmTidy(doge_corpus, 
+                                     spell_checking = TRUE, 
+                                     mode_correction = 0)
+
+dfm_doge <- doge_tidy$dfm
+remove(doge_tidy, doge_corpus)
+
+```
+La document term matrix risulta avere dimensioni troppo grandi per poterla utilizzare. Andiamo quindi ad utilizzare la fuzione _dfm\_trim_ per ridurre la sparisità della matrice. 
+
+```{r}
+dfmTrimmed <- dfm_trim(dfm_doge, min_docfreq = 100, min_termfreq = 2500)
+remove(dfm_doge)
+
+dfmTrimmed
+```
+
+Per applicare la funzione LDA, è necessario che ogni riga della matrice di input contenga almeno una entry diversa da zero. Si deve quindi eliminare quei documenti in cui la somma delle frequenze di una parola è pari a zero. 
+
+```{r}
+# delete row with all zeros 
+rowSum <- apply(dfmTrimmed , 1, sum)
+dfmTrimmed <- dfmTrimmed[rowSum> 0, ]
+remove(rowSum)
+
+library(topicmodels)
+# Latent Dirichlet allocation
+doge_lda <- LDA(dfmTrimmed, k = 4, control = list(seed = 123456789))
+doge_lda
+```
+
+Si va poi ad estrarre le probilità per ciascuna parola di appartenere ad un certo topic estratto. 
+
+per ciascun documento (post) di appartenere ai tre topics estratti dal modello . 
+
+```{r}
+doge_topics <- tidy(doge_lda, matrix = 'beta')
+```
+
+E ad analizzare i risultati ottenuti:
+
+```{r}
+
+# the 10 terms that are most common within each topic
+doge_top_terms <- doge_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+doge_top_terms
+
+doge_top_terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip() +
+  scale_x_reordered()
+```
+Come ci si poteva aspettare, essendo dei post già riferiti ad un solo argomento la classificazione in topic non risulta molto utile all'analisi. Nonostante ciò possiamo identificare delle relazioni tra le parole nei diversi topic. 
+
+Per esempio il topic numero 1 ha come argomento principale il dogecoin stesso, quali sono le parole più associate a lui come _binance_ (il wallet da cui si può comprare o vendere la cryptovaluta), _moon_ per il motto che il prezzo toccherà il cielo o _robinhood_ probabilmente riferito al fatto che dogecoin è una moneta che ha ancora un prezzo molto basso ma che ha permesso l'investimento e guadagno anche di coloro che sognavano i Bitcoin. 
+
+Il topic numero 4 invece sembra riferirsi maggiormente all'ambito finanziario di investimenti. Le altre due classificazioni invece non sembrano avere una tematica comune chiara. 
+
+```{r include = FALSE}
+remove(dfmTrimmed, doge_lda, doge_top_terms, doge_topics)
+```
 
 ### Comments per Time 
 
 Una volta che abbiamo associato i sentimenti ai bigrammi e fatto una prima analisi esplorativa del dominio, possiamo andare a vedere come si evolve il sentimento nel tempo e rapportarlo al numero di commenti effettuati e all'andamento del prezzo della moneta nel mercato. Si va quindi a visualizzare i grafici dell'andamento di numero di commenti per giornata sia del dataset complessivo, che del singolo anno 2021.
-
 
 ```{r timexcomment}
 data <- readRDS("../Data/dogecoin.rds")
@@ -2187,12 +2229,13 @@ plot_com_per_date(doge_df)
 
 ```
 
-Possiamo identificare così i periodi di maggior attività degli utenti, 
+Possiamo identificare così i periodi di maggior attività degli utenti: 
 - Luglio 2020
 - Febbraio 2021
 - Aprile/Maggio 2021
 
 
+Come riportato da alcune notizie online il 13 luglio 2020, dopo una settimana di video virali su TikTok, Dogecoin è cresciuto del 35% in prezzo e del 2.000% in volume. Da quel momento in poi l'interesse per dogecoin è sempre più aumentato tra gli investitori. Oltre alla comparsa su Tik Tok si hanno i tweet scritti dal noto Elon Musk a inizio 2021, che hanno fatto ancor più crescere l'interesse verso questo mercato. 
 
 ##### CoinMarketCap 
 
@@ -2219,10 +2262,6 @@ Prendiamo i dati di dogecoin attraverso il suo simbolo.
 
 get_crypto_listings()
 
-init2020 <- as.integer(format(as.Date("2020-05-31"), "%Y%m%d"))
-end2020 <- as.integer(format(as.Date("2020-12-31"), "%Y%m%d"))
-init2021 <- as.integer(format(as.Date("2021-01-01"),"%Y%m%d" ))
-today <- as.integer(format(Sys.Date(), "%Y%m%d"))
 
 doge = coinmarketcapr::get_crypto_meta(symbol="DOGE")
 doge_2020 = coinmarketcapr::get_crypto_quotes(
@@ -2242,6 +2281,8 @@ p <- ggplot(historical_data) +
   ylab("Price (in USD)") + theme_minimal()s
 ```
 
+
+Per avere l'accesso ai dati storici completi è necessario possedere la versione non base delle API messe a disposizione da CoinMarketCap.
 Utilizziamo allora i dati recuperati da *Yahoo! Finance*. Carichiamoli e prepariamoli per esser visualizzati. 
 
 ```{r}
@@ -2297,7 +2338,7 @@ print(plot + com2021)
 remove(plot, com2021, dogeusd, doge_com_2021)
 ```
 
-Troviamo delle somiglianze in questi grafici, bisognerebbe tener conto della giornata lavorativa o meno, o comunque all'attività storica degli utenti nel corso della settimana. Inoltre possiamo identificarlo come un evento non del tutto anormale, dal momento che arrivano molti utenti nuovi e vengono utilizzati slogan per invogliare le persone a comprare DOGE, più le persone discutono interagiscono attraverso i commenti più potrebbero esser portate a comprare o a vendere.
+Nonostante si possano trovare delle somiglianze nei grafici, come ad esempio il picco a inizio e Febbraio e la situazione instabile di Marzo, bisognerebbe tener conto della giornata lavorativa o meno, o comunque dell'attività storica degli utenti nel corso della settimana. Inoltre possiamo identificarlo come un evento non del tutto anormale, dal momento che arrivano molti utenti nuovi e vengono utilizzati slogan per invogliare le persone a comprare DOGE, più le persone discutono e interagiscono attraverso i commenti più potrebbero esser portate ad entrare in questo mercato. 
 
 #### Sentiment over Time
 
@@ -2305,15 +2346,11 @@ Per dare un sentimento ad ogni commento, una volta asseganti i sentimenti a cias
 
 > Sentiment polarity for an element defines the orientation of the expressed sentiment, i.e., it determines if the text expresses the positive, negative or neutral sentiment of the user about the entity in consideration.
 
+Si è scelto di utilizzare il concetto di polarità unendolo alla tecnica _Lexicon based_ che consiste nel conteggiare il numero di parole positive e negative per assegnare alla frase il sentimento più presente. Si ha quindi per ogni bigramma il suo corrispondete sentimento, che può essere positivo, negativo oppure neutro, successivamente andremo a calcolare il numero di bigrammi per ogni frase in modo da tener conto di questo nel calcolare il valore di sentimento finale per ciascun id corrispondente ad ogni comment. 
 
 """
 Con la funzione _words.computeSentiment_ abbiamo definito come assegnare a ciascuna parola il valore rappresentativo per il sentimento. In questa sezione è invece necessario trovare una strategia per rappresentare il sentimento dell'intero commento. 
 """
-
-Si è scelto di utilizzare il concetto di polarità unendolo alla tecnica _Lexicon based_ che consiste nel conteggiare il numero di parole positive e negative per assegnare alla frase il sentimento più presente. Si ha quindi per ogni bigramma il suo corrispondete sentimento, che può essere positivo, negativo oppure neutro, successivamente andremo a calcolare il numero di bigrammi per ogni frase in modo da tener conto di questo nel calcolare il valore di sentimento finale per ciascun id corrispondente ad ogni comment. 
-
-L'obiettivo di utilizzare il conteggio delle parole nella frase è, avendo molti commenti corti, di dare un maggior peso a frasi in cui possiamo trovare sentimenti contrastanti. 
-
 
 ```{r def-sent-per-comm}
 
@@ -2370,8 +2407,6 @@ Bi_per_id <- sent_per_comm_dogeBi %>%
    count()
 
 #max(Bi_per_id$n)
-
-
 sent_per_comm_dogeBi = sent_per_comm_dogeBi %>% inner_join(Bi_per_id, by = "id")
 
 remove(Bi_per_id)
@@ -2393,11 +2428,6 @@ sigmoid <- function(x) {
 fatt <- function(x){
     ifelse(x == 1, 1, x * fatt(x-1))
 }
-
-polarity <- function(pos, neg, neut){
-   
-}
-         
 
 over_time_sentiment <- sent_per_comm_dogeBi %>%
          count(bing, id) %>%
@@ -2423,7 +2453,7 @@ over_time_sentiment <- sent_per_comm_dogeBi %>%
 
 ```
 
-Definiamo la funzione per eseguire il plot del sentimento diviso per anno e mese. Andiamo inoltre a definire una funzione personalizzata per 
+Definiamo la funzione per eseguire il plot del sentimento diviso per anno e mese. 
 
 ```{r}
 
@@ -2434,9 +2464,10 @@ plot_year_sentiment<- function(data, in_year, pol){
          filter(year_ == in_year) %>%
          mutate(month = month(date)) %>%
          mutate(dayMonth = as.numeric(day(date))) %>%
+         group_by(dayMonth, month) %>%
+        
          mutate(color_ =  if_else( {{pol}} > 0.5, "green3", 
                                    if_else( {{pol}} > - 0.5, "blue", "orangered2")) ) %>%
-         group_by(dayMonth, month) %>%
          mutate(mean_per_day = mean({{pol}}))
          
      #df <- aggregate(polarity_tan~., df, FUN=mean)
@@ -2492,7 +2523,7 @@ print(h1 + h2 + h3)
 ```
 
 
-Utilizzando la formula per tenere conto anche della dimensione del commento, abbiamo delle variazione nel valore numerico della polarità, ma le classi positivo-negativo-neutro identificate dagli intervalli, rispettivamente [0.5, 1], [-0.5, 0.5] e [-1, 0.5] rimangono invariate. 
+Utilizzando la formula per tenere conto anche della dimensione del commento, abbiamo delle variazione nel valore numerico della polarità, ma le classi positivo-negativo-neutro identificate dagli intervalli, rispettivamente [0.5, 1], [-0.5, 0.5] e [-1, 0.5] rimangono pressochè invariate. 
 
 
 ```{r}
@@ -2517,7 +2548,7 @@ print(h1 + h2 + h3)
 remove(h1, h2, h3)
 ```
 
-Uniamo il dataset con le misure di polarità con il dataframe contenente la coppia data e id. In questo modo possiamo andare a visualizzare l'andamento delle polarità in relazione al tempo, e successivamente utilizzeremo questi dati nella costruzione della rete degli utenti. 
+Uniamo il dataset con le misure di polarità con i dati riguardanti la data di creazione del commento, l'id del commento per raggruppare i singoli bigrammi e successivamente andremo anche a recuperare i valori di _score_ assegnati a ciascun commento di ogni utente. In questo modo possiamo andare a visualizzare l'andamento delle polarità in relazione al tempo, e successivamente utilizzeremo questi dati nella costruzione della rete degli utenti. 
 
 ```{r}
 # re-join date 
@@ -2548,7 +2579,7 @@ sentiment_author <- over_time_sentiment_join %>%
 
 ```
 
-Aggregato le polarità e facendone la media per ogni id presente nel dataset, possiamo andare a fare il plot per ogni singolo giorno dell'andamento della polarità. Si va inoltre a calcolare la polarità del sentimento medio per ciascun utente. 
+Siamo andati a calcolare il sentimento medio per ogni giornata, per ogni commento e per ogni utente. Andiamo quindi ad utilizzare la funzione definita sopra per visualizzare i diversi grafici.
 
 ```{r}
 p1 <- plot_year_sentiment(over_time_sentiment, "2020", polarity_tan)    # date sentiment mean
@@ -2559,9 +2590,9 @@ p1 <- plot_year_sentiment(over_time_sentiment, "2020", polarity_tan)    # date s
 print(p1$plot)
 ```
 
-Questo primo grafico ci fa vedere in media la polarità del sentimento giornaliero (stando attenti a non confondersi con i colori che risultano sbagliati nella visualizzazione ma corretti nel dataframe) si ha in generale una polarità positiva, questo ci indica come in genere ci sia un basso numero di commenti con polarità negativa. 
+Questo primo grafico ci fa vedere in media la polarità del sentimento giornaliero, si ha in generale  TODO 
 
-Si va poi a visualizzare il numero di commenti tra tre diverse polarità per ogni giornata e mese. 
+Si va poi a visualizzare il numero di commenti delle tre diverse polarità per ogni giornata e mese. 
 
 ```{r}
 p2 <- plot_year_sentiment(over_time_sentiment_join, "2020", polarity_tan)  
@@ -2610,28 +2641,22 @@ remove(s, p)
 #### An advanced tools for sentiment analysis on social media 
 
 
-Riscontrando molte problematiche dovute ai testi del social media e al limitato vocabolario per la sentiment analysis si è deciso di approfondire le tecniche utilizzate in letteratura. Si è trovato questo articolo del 2020 riguardante un analisi fatta su Twitter riguardo il tema Bitcoin, in cui viene utilizzata una nuova tecnica chiamata VADER.  
+Riscontrando molte problematiche dovute ai testi del social media e al limitato vocabolario per la sentiment analysis si è deciso di approfondire le tecniche utilizzate in letteratura. Si è trovato questo articolo del 2020 riguardante un analisi fatta su Twitter riguardo il tema Bitcoin, in cui viene utilizzata una nuova tecnica chiamata VADER [@vader].  
 
 Si è quindi provato ad utilizzarla su un sottoinsieme del dataset, per testarne il funzionamento. Il processamento del testo richiede molto tempo, è stato quindi impossibile effettuare un confronto nella classificazione dei sentimenti. 
 
-VADER-Sentiment-Analysis
+###### VADER-Sentiment-Analysis 
 
-VADER ( Valence Aware Dictionary for Sentiment Reasoning) is a model used for text sentiment analysis that is sensitive to both polarity (positive/negative) and intensity (strength) of emotion. It is available in the NLTK package and can be applied directly to unlabeled text data.
+VADER ( Valence Aware Dictionary for Sentiment Reasoning) è un modello usato per l'analisi del sentimento sia per la polarità che per l'intensità delle emozioni. Principalmente è stato reso disponibile per il pacchetto NLTK del linguaggio Python ed è applicabile direttamente al corpus di testo grezzo e non etichettato. 
 
-VADER sentimental analysis relies on a dictionary that maps lexical features to emotion intensities known as sentiment scores. The sentiment score of a text can be obtained by summing up the intensity of each word in the text.
+L'analisi viene fatta mappando ciascuna parola al 'sentiment score' che identifica l'intensità dell'emozione. Il punteggio del sentimento di un intero testo può esser ottenuto sommando l'intensità di ciascuna parola. Oltre a riconoscere bigrammi che contengono negazioni, è anche capace di distinguere le parole scritte in maiuscolo e che quindi dovrebbero avere una maggior intensità nel sentimento. 
 
-For example- Words like ‘love’, ‘enjoy’, ‘happy’, ‘like’ all convey a positive sentiment. Also VADER is intelligent enough to understand the basic context of these words, such as “did not love” as a negative statement. It also understands the emphasis of capitalization and punctuation, such as “ENJOY”
-
-```
+```{r}
 data <- readRDS("../Data/dogecoin.rds")
 doge_df <- data$df_comm
-
-
 remove(data)
-```
 
-```
-# VIEW PANCAKESWAP REPORT 
+
 library(vader)
 
 colnames(doge_df)
@@ -2639,28 +2664,28 @@ colnames(doge_df)
 df_for_vader <- doge_df %>%
    mutate(year = year(date)) %>%
    mutate(month = month(date)) %>%
-   filter(year == "2021") 
-
-
+   filter(year == "2021") %>%
+   head(2)
 
 vader_analysis <- df_for_vader %>%
-   head(2) %>%
    mutate(scores = list(get_vader(df_for_vader$body))) %>%
-   unnest(scores) %>%
+   #unnest(scores) %>%
    select(id, date, author, scores)
 
+vader_analysis
+vader_analysis$scores
 
+remove(doge_df, df_for_vader, vader_analysis)
 ```
 
-
-## Classify User with Sentiment and Score
-
-- join on id, over_time_sentiment with  original set with users
-- compute polarity (avg of comment polarity)
-- retrieve upvote for each user 
+Dai risultati di due commenti possiamo vedere come venga associato un punteggio per ogni sentimento (positivo, negativo e neutro) per ciascuna frase, oltre ad avere i punteggi per ogni parola presente nel testo sotto forma di lista. 
 
 
-Recuperiamo i dati riguardanti gli score per ogni commento identificato dal ID. Eseguiamo poi un inner join per relazionare gli score al dataset con i bigrammi associati alla polarità del sentimento per 
+## Classify Users with Sentiment and Score
+
+Recuperiamo i dati riguardanti gli score per ogni commento e andiamo poi a calcolarne la media per ciascun utente. Non si è andati a legare ciascun commento al suo score a causa dell'enorme quantità di commenti che avrebbero reso difficile la visualizzazione. 
+
+Per lo stesso problema di memoria non abbiamo inserito questo dato all'interno del dataset iniziale. 
 
 ```{r}
 
@@ -2682,14 +2707,17 @@ data_score <- data %>%
 remove(data)
 ```
 
-Si va a calcolare lo score medio per ogni utente in modo da avere un'informazione in più per la costruzione della rete. 
+Essondo presenti molti utenti con score pari a 1 si è deciso di normalizzare i valori nell'intervallo [0-1], in modo da avere una miglior distribuzione e poter legare la feature _score_ ad una caratteristica del grafico (dimensione o colore del nodo per esempio). 
 
 ```{r}
 ## MEAN SCORE FOR EACH USER 
 
 mean_score_usr <- aggregate(score ~ author, data_score, FUN = mean ) %>%
-   mutate( score_nrm = range01(score) )
+   mutate( score_nrm = range01(score) ) %>%
+   as.data.frame()
 head( mean_score_usr %>% arrange(-score), 5)
+
+write_rds(mean_score_usr, "../Data/usr_score.rds")
 
 ```
 
@@ -2701,6 +2729,7 @@ head(sentiment_author, 3)
 sentiment_author <- sentiment_author %>%
    mutate(polarity_tan = if_else(is.na(polarity_tan), 0, polarity_tan))
 
+write_rds(sentiment_author, "../Data/sent_usr.rds")
    
 remove(data_score)
 ```
@@ -2732,11 +2761,9 @@ remove(time_sent_aut_score)
 
 #### Build the Users Network
 
-- ARCHI = RELAZIONE DI TIPO COMMENTO NON DIREZIONALE 
-- ARCHI COLORATI PER POLARITA 
-- SCORE MEDIO PERSONA GRANDEZZA NODO 
+Per costruire le relazioni tra gli utenti si è utilizzato il dato _link\_id_, che permette di indentificare la gerarchia dei commenti all'interno di ogni submit post ( _parent\_id_ ).
 
-Per costruire le relazioni tra gli utenti si è utilizzato il dato _link\_id_, che permette di indentificare le discussioni all'interno di ogni submit post ( _parent\_id_ ).
+Definiamo quindi la funzione che ci permette di scegliere gli utenti con il maggior numero di commenti effettuati e con questi andare poi a costruire la relazione _'gli utenti hanno avuto un'interazione'_ facendo un join sulla variabile _link\_id_. L'interazione in questo caso consiste nell'aver commentato uno stesso post o lo stesso commento all'interno di un post. 
 
 ```{r user-top-extract}
 # data must have cols : (created_utc, author, link_id )
@@ -2759,7 +2786,7 @@ compute_top_usr_net <- function(dataf, file_name, num_usr){
       group_by(author) %>% 
       summarise( n_aut = n()) %>% 
       ungroup() %>% 
-      arrange(-n_aut) %>% 
+      arrange(-n_aut) %>%
       head(num_usr)
    
    # take usr with most comment
@@ -2774,8 +2801,7 @@ compute_top_usr_net <- function(dataf, file_name, num_usr){
       select(author.x, author.y, link_id, id.x, id.y)
    
    # write it on file 
-   write.csv(net_top_usr, file=file_name,
-          row.names=FALSE)
+   write.csv(net_top_usr, file=file_name)
    
    nodes <- top_usr_info %>%
       distinct(author)
@@ -2786,16 +2812,27 @@ compute_top_usr_net <- function(dataf, file_name, num_usr){
 
 ```
 
+Prendendo il dataframe di partenza si va quindi a estrarre i nodi e gli archi della rete. 
 
 ```{r}
+data <- readRDS("../Data/dogecoin.rds")
+doge_df <- data$df_comm
+remove(data)
 
-net10usr <- compute_top_usr_net(doge_df, "../Data/top_usr_10.csv", 10)
+# save only edges
+net10usr <- compute_top_usr_net(doge_df, "../Data/top_usr_10.rds", 10)
+remove(doge_df, dogeusd)
 
 ```
 
-Attraverso questa costruzione del dataset, abbiamo messo in relazione autori che si sono commentati a vicenda in modo da poter valutare ciascun commento con il suo sentimento e allo stesso tempo classificare ogni utente in base allo score medio. Per motivi di grandezza computazionale, si è scelto di prendere in esame gli utenti con il maggior numero di commenti scritti nel subreddit.
+Per motivi di grandezza computazionale, si è scelto di prendere in esame gli utenti con il maggior numero di commenti scritti nel subreddit. Dobbiamo però aggiungere le informazioni relative al sentimento per ciascun link_id e lo score per ciascun utente. 
 
-Dobbiamo però aggiungere le informazioni relative al sentimento per ciascun link_id e lo score per ciascun utente. 
+
+Si può notare come i risultati della funzione definita sopra siano: 
+- la lista di nodi presi
+- un dataframe contente i nodi da legare, il link_id del commento e gli identificativi di ciascun commento.
+
+Gli identificanivi riguardo uno specifico utente vengono ripetuti in diversi righe, questo per il fatto che in una discussione gli utenti scrivano più di un solo commento e quindi la relazione di interazione tra più utenti avviene anche più volte in uno stesso commento. 
 
 
 ```{r}
@@ -2805,9 +2842,14 @@ nodes <- net10usr$nodes
 edges <- net10usr$edges
 
 ```
-Per ciascun nodo abbiamo che la coppia link_id - id identifica ciascun commento di quell'autore. 
+
+Per questo motivo si ha un enorme differenza tra il numero di nodi (10) e il numero di archi presenti (79,756), anche per il fatto che abbiamo selezionato gli utenti con il maggior numero di commento. Per poter visualizzare la rete dovremmo andare a semplificare questa relazione in modo da ridurre il numero di archi presenti. 
+
+Prima di fare ciò, si va ad aggiungere al dataframe dei nodi le informazioni riguardo il punteggio medio dei commenti e il sentimento medio di ciascun utente.
 
 ```{r}
+mean_score_usr <- readRDS("../Data/usr_score.rds")
+sentiment_author <- readRDS("../Data/sent_usr.rds")
 
 # join mean score and sentiment with user
 nodes_ <- nodes %>%
@@ -2815,16 +2857,20 @@ nodes_ <- nodes %>%
   
 nodes_ <- nodes_ %>%
    left_join(sentiment_author, by = "author") %>%
+   #replace NA sentiment with zero (neutral sentiment)
    mutate(polarity_tan = if_else(is.na(polarity_tan), 0, polarity_tan)) %>%
-   select(author, polarity_tan, score_nrm)
+   select(author, polarity_tan, score, score_nrm)
 
-# join sentiment with edges with id and link id for each pairs user-id
-   
 ```
 
+```{r include = FALSE}
+remove(net10usr, over_time_sentiment, over_time_sentiment_join, 
+       sentiment_author, sentiment_id, mean_score_usr)
+```
 
-Per costruire la relazione sentimento per ogni coppia di utenti si va a fare una media della polarità tra il commento di un utente e l'altro. In questo modo abbiamo che ogni arco rappresenta una relazione 'hanno commenti adiacenti' pesato dalla polarità di essi. Inoltre per ogni utente oltre ad andare a calcolare una misura di centralità abbiamo anche il dato 'score' che identifica il punteggio che il commento ha ricevuto tra upvote e downvote. 
+Un'analisi più interessante si potrebbe fare andando a tenere conto del sentimento di ciascun commento, invece del sentimento medio dell'utente. Similmente si può fare lo stesso ragionamento per gli _score_. Ciò non è stato possibile a causa dell'elevato numero di archi e la ridotta memoria disponibile. 
 
+Attraverso la funzione _tbl\_graph_ messa a disposizione dalla libreria _tidygraph_ andiamo a costruire gli elementi del grafo. 
 
 ```{r net_doge}
 
@@ -2834,39 +2880,211 @@ edges_ <- edges %>% rename(
    post_id = link_id,
 )
 
+edge_numCommUsr <- edges_ %>%
+   group_by(from, to, post_id) %>%
+   count() %>%
+   ungroup()
+
+edges_ %>%
+   inner_join(edge_numCommUsr, by = c("from", "to", "post_id"))
+
 graph <- tbl_graph(nodes = nodes_, edges = edges_)
+write_rds(graph, "../Data/graph.rds")
+
+
+```
+
+La computazione per visualizzare il grafo richiede molte risorse di memoria, anche per il fatto che le interazioni tra i nostri primi 10 utenti sono molte. Si va quindi a creare un grafo non diretto in cui vengano collassate tutte le interazioni tra due utenti di uno stesso link_id in un unico arco, si utilizza la funzione _as.undirected_ messa a disposizione dalla libreria _igraph_.
+
+```{r}
+library("igraph")
+graph <- readRDS("../Data/graph.rds")
+graph_undir <- graph %>%
+   # edge.attr.comb per mantenere l'informazione del primo elemento
+   # tra quelli che hanno subito il raggruppamento  
+   as.undirected(mode = 'collapse', edge.attr.comb = "first") %>%
+   as_tbl_graph()
+
+remove(graph)
+print(graph_undir)
+```
+
+Abbiamo così perso l'informazione riguardante il numero di interazioni tra ciascun utente.
+
+
+```{r}
+graph_undir %>% 
+   activate(nodes) %>%
+   # compute centrality 
+   mutate(eigenv = centrality_eigen()) %>%
+   ggraph(layout='kk') +
+      geom_edge_link(aes(colour = post_id ),  show.legend = FALSE ) + 
+      geom_node_point(aes(size = score_nrm,  color = polarity_tan) ) + 
+      geom_node_text(aes(label = paste0(author),  repel = TRUE))
+
+
+```
+
+Se andiamo a visualizzare le misure di centralità utilizzate si può vedere come siano costanti per ogni nodo, questo perchè si sono considerati pochi nodi ed essendo il grafo risultante è completo. Se andavamo a considerare ogni singolo commento, il numero di archi entranti/uscenti dei nodi sarebbero in numero diversi. 
+   
+```{r}
+
+# in questo caso la betweeness potrebbe essere intesa come l'influeza che un nodo ha avendo interagito con 
+# diversi commenti, e quindi molto attivo nella comunità, ed è anche per questo motivo che si trova su più shortest path 
+
+graph_undir %>% 
+   activate(nodes) %>%
+   # compute influence
+   mutate(eigenv = centrality_eigen()) %>%
+   mutate(betweenness = centrality_betweenness()) %>%
+   ggraph(layout='kk') +
+   geom_edge_link(aes( colour = post_id), size=0.1, show.legend = FALSE) +
+   geom_node_point(aes(size = betweenness, alpha = eigenv) )+ 
+   geom_node_text(aes(label = author),  repel = TRUE)
+
+```
+
+```{r include=FALSE}
+remove(graph, graph_undir)
+```
+
+Si è scelto di utlizzare la _eigenvector centrality_ e non il _pageRank_ essendo il grafo non diretto
+
+##### 50 top users Network
+
+Andiamo adesso a ripetere il procedimento con un numero maggiore di nodi, in modo da vedere se le misure di centralità possano esser utili in un dominio di utenti maggiore.
+
+```{r}
+
+data <- readRDS("../Data/dogecoin.rds")
+doge_df <- data$df_comm
+remove(data)
+
+net50usr <- compute_top_usr_net(doge_df, "../Data/top_usr_50.rds", 50)
+mean_score_usr <- readRDS("../Data/usr_score.rds")
+sentiment_author <- readRDS("../Data/sent_usr.rds")
+remove(doge_df)
+
+# head(net50usr, 3)
+
+nodes <- net50usr$nodes
+edges <- net50usr$edges
+
+# join mean score and sentiment with user
+nodes_ <- nodes %>%
+   inner_join(mean_score_usr, by="author") 
+  
+nodes_ <- nodes_ %>%
+   left_join(sentiment_author, by = "author") %>%
+   mutate(polarity_tan = if_else(is.na(polarity_tan), 0, polarity_tan)) %>%
+   select(author, polarity_tan, score, score_nrm)
 
 ```
 
 ```{r}
-graph %>% 
+hist(nodes_$score) 
+
+nodes_ %>%
+   filter(score< 0 )
+```
+Per visualizzare meglio il sentimneto degli utenti si va a rimuovere la variabile che indica lo score medio dell'utente, questo perchè non si ha questa grande differenza tra gli score dei primi 50 utenti. Avendo controllato di non avere pesi negativi e non avendo molta differenza tra gli score di questi utenti, possiamo andare ad utilizzare lo score non normalizzato come variabile nel grafo. 
+
+
+```{r include = FALSE}
+remove(doge_df, net50usr, over_time_sentiment, over_time_sentiment_join, 
+       sentiment_author, sentiment_id, mean_score_usr)
+```
+
+Si va nuovamente a prepare i dati per la costruzione del grafo. 
+
+```{r}
+
+edges_ <- edges %>% rename(
+   from = author.x,
+   to = author.y,
+   post_id = link_id,
+)
+
+nodes_ <- nodes_ %>% rename(
+   sentiment.polarity = polarity_tan, 
+   mean.score = score, 
+   mean.score.nrm = score_nrm
+)
+
+graph <- tbl_graph(nodes = nodes_, edges = edges_)
+write_rds(graph, "../Data/graph_50.rds")
+
+remove(nodes, nodes_, edges, edges_)
+```
+
+Per comodità di testing si è salvato il grafo corrispondente nella cartella Data, in modo da recuperarlo senza dover ripetere la computazione intera. 
+
+```{r}
+library("igraph")
+graph <- readRDS("../Data/graph_50.rds")
+
+graph_undir <- graph %>%
+   as.undirected(mode = 'collapse', edge.attr.comb = "first") %>%
+   as_tbl_graph()
+
+print(graph_undir)
+```
+
+
+```{r}
+graph_undir %>% 
    activate(nodes) %>%
    # compute centrality 
    mutate(eigenv = centrality_eigen()) %>%
-   activate(edges) %>%
-   mutate(betweenness = centrality_edge_betweenness()) %>%
    ggraph(layout='kk') +
-      geom_edge_link(aes(colour = post_id),  show.legend = FALSE) + # width=betweenness
-      geom_node_point(aes(size = eigenv, alpha = score), colour = 'blue' ) + 
-      geom_node_text(aes(label = name),  repel = TRUE)
+      geom_edge_link(aes(colour = post_id, alpha = 0.4),  show.legend = FALSE) + 
+      geom_node_point(aes(size = eigenv, alpha = mean.score, color = sentiment.polarity), ) + 
+      geom_node_text(aes(label = author), repel = TRUE)
 
 ## non calcolo il pagerank essendo un grafo indiretto 
 
 ```
-   
+
+Per visualizzere meglio la rappresentazione della centralità e del sentimento si va a rimuovere la variabile _mean.score_ che non presenta tutta questa differenza all'interno dei nodi e i valori non normalizzati risultano tutti positivi.
+
 ```{r}
 
 # in questo caso la betweeness potrebbe essere intesa come l'influeza che un nodo ha avendo interagito con 
 # diversi commenti, e quindi molto attivo nella comunità interagendo con molte persone diverse
 # e quindi si trova su più shortest path 
 
-graph_topcom_doge %>% 
+graph_undir %>% 
    activate(nodes) %>%
    # compute influence
    mutate(betweenness = centrality_betweenness()) %>%
    ggraph(layout='kk') +
-   geom_edge_link(aes( colour = link_id), size=0.1, show.legend = FALSE) +
-   geom_node_point(aes(size = betweenness, alpha = betweenness) )+ 
-   geom_node_text(aes(label = name),  repel = TRUE)
+   geom_edge_link(aes( colour = post_id), size=0.1, alpha = 0.3, show.legend = FALSE) +
+   geom_node_point(aes(size = betweenness, color = sentiment.polarity) )+ 
+   geom_node_text(aes(label = author),  repel = TRUE)
 
 ```
+
+## Conclusion 
+
+Non essendo una piattaforma social in cui vengono utilizzate relazioni di amicizia e già divise in comunità per un certo argomento, la studio fatto sulla rete (semplificata) degli utenti con il maggior numero di commenti ci porta ad osservare come gli utenti con una centralità maggiore, in entrambe le misure utilizzate, sono anche quelli che hanno commentato un numero maggiore di post diversi. 
+Si può infatti notare come i nodi centrali (con centralità maggiore) interagiscano con più utenti su diversi commenti, al contrario nelle zone periferiche troviamo quegli utenti che scrivono molti commenti ma in pochi post diversi avendo quindi meno interazione con tanti altri utenti. 
+
+Riguardo il sentimento medio, si ha un solo utente con polarità molto negativa e che interagisce su molti commenti; mentre gli utenti con centralità maggiore tendono ad avere un sentimento medio neutrale, questo può esser dovuto al fatto che andando a far la media dei sentimenti si ha un annullamento tra commenti positivi e negativi dell'utente stesso. 
+
+Rispondendo alle domande poste all'inizio del progetto, si è notato come possa esistere una relazione tra i sentimenti estratti dal subreddit di dogecoin e l'andamento del prezzo sul mercato. Questo può confermare il fatto che più si parla di un certo argomento, sia positivamente che negativamente, più l'attenzione generale sale. 
+Questa conclusione può esser fatta per il caso specifico di dogecoin, in cui anche l'alta frequenza di bigrammi relativi all'incitamento all'acquisto può avere avuto una certa influenza.
+
+Per confrontare i bigrammi e sentimenti dei diversi subreddit si deve andare ad osservare i risultati ottenuti nell'altro report. In generale la situazione riscontrata nella comunità di dogecoin non si presenta anche negli altri, infatti sono presenti parole o bigrammi che rimandano ad altri argomenti che la sola compravendita della cryptovaluta in questione. 
+
+
+Per rispondere all'ultima domanda, cioè quando possono esser considarati affidabili gli utenti, non possiamo dirlo con certezza con il solo sentimento con cui si esprimono. Tuttavia, personalmente, sarei portato a 'fidarmi' maggiormente di una persona con sentimento medio positivo e che non sia neanche tra quelle con centralità maggiore; questo perchè reputo che se un utente ha un gran numero di commenti con un sentimento medio neutrale e senza avere uno score più alto rispetto gli altri, probabilmente le informazioni contenute nei suoi testi non sono molte e molto rilevanti, ma magari più di spam o commenti generali. 
+
+
+Per concludere, si è toccato con il codice la difficoltà di preparare dei dati grezzi e incorretti per l'analisi del testo e quanto può esser utile un correttore delle parole o una tecnica come VADER per il text mining. Purtroppo non si è riusciti a fare un analisi della rete molto esaustiva a causa sia delle risorse computazionali ridotte (il grafo completo occupa circa 60GB di memoria, impedendone l'allocazione) sia essendo reddit un social media con una gestione diversa degli utenti rispetto agli altri. 
+
+L'obiettivo principale però era quello di partire da dei dati grezzi e raccolti autonomamente per arrivare ad estrapolare informazioni interessanti sia per quanto riguarda il text mining sia per una possibile costruzione della rete sociale. 
+
+
+## References
+
+

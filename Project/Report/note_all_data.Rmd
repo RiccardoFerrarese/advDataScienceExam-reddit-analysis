@@ -11,7 +11,7 @@ output:
     df_print: paged
 ---
 
-## PANCAKE SWAP
+Questo report contiene l'analisi di base anche sugli altri subreddit. 
 
 ```{r setup, echo=FALSE}
 knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE, 
@@ -28,6 +28,8 @@ knitr::knit_hooks$set(crop = knitr::hook_pdfcrop)
 
 ```
    
+## PANCAKE SWAP
+
 Come prima cosa scarichiamo i dati riguardanti il subreddit da analizzare.
 
 ```{r}
@@ -57,6 +59,9 @@ data$df_comm %>%
 print_("REDDIT's POST DF: ")
 summary(data$df_post)
 ```
+Ci rendiamo conto della differenza di commenti raccolti guardando la dimensione del campo body. Si hanno infatti 2411 commenti corrispondenti a 2405 post. 
+
+Si va poi ad analizzare i token e bigrammi estratti dal corpus di testo. 
 
 ```{r, crop=TRUE}
 
@@ -69,7 +74,7 @@ tidy <- corpus.tokenize_dfmTidy(com_corpus,
                                      spell_checking = TRUE, 
                                      mode_correction = 0)
 clean_tidy <- corpus.clean_tidy(tidy$tidy, mode='stem' )
-word_counts <- corpus.countPlot_tidy(clean_tidy, threshold_count = 5)
+word_counts <- corpus.countPlot_tidy(clean_tidy, threshold_count = 50)
 remove(clean_tidy)
 ```
 
@@ -84,27 +89,18 @@ textplot_wordcloud(dff, min_count = 200,
 remove(dff)
 ```
 
-Tra le parole più presenti, oltre a doge, possiamo notare parole come: 
-- buy
-- hold
-- moon
-- invest/keep
+A differenza della _wordcloud_ fatta per il subreddit di Dogecoin possiamo notare come non si hanno più parole legate al solo tema di comprare/vendere cryptovalute, ma sono presenti anche parole riguardanti diversi wallet probabilmente dovute a consigli o discussioni su quali utilizzare. 
 
 
 ```{r crop=TRUE}
 words.classSentiment(word_counts)
 ```
 
-Tenendo conto che molte parole, magari offensive, vengano utilizzante in discussioni che non c'entrano molto con il mercato della moneta, la divisione in classi dei sentimenti ci fa vedere come ci sia 
 
 
 ```{r crop=TRUE}
 word_sentiment <- words.computeSentiment(word_counts, n_filter = 10)
 ```
-
-In questo grafico possiamo trovare parole interessanti divise in base alla loro positività. Nella parte negativa si può notare subito come 'dump', termine che in finanza significherebbe far sgonfiare il prezzo, sia molto utilizzata e attorno una serie di parole che non sono legate alla fiducia, ma al contrario fanno capire come il mercato di questa moneta non sia percepito come non stabile. Dall'altra parte ci sono parole che cercano di ingoraggiare all'investimento in dogecoin. 
-
-Andiamo però a visualizzare i bigrammi per vedere se queste parole prese con un minimo di contesto facciano presumere le stesse ipotesi. 
 
 
 ```{r include = FALSE}
@@ -129,28 +125,25 @@ bigrams_counts <- corpus.countPlot_tidy(clean_tidy_bigrams,
 
 ```
 
-Analizzando i bigrammi si può notare ancor più maggiormente che la gran parte delle parole si riferiscono a spingere gli utenti ad acquistare e mantenere i dogecoin nel proprio wallet digitale. 
+Analizzando i bigrammi si può notare ancora la notevole differenza con i bigrammi estratti dal corpus relativo a Dogecoin. Infatti non sono più presenti coppie di parole che incitano all'acquisto tra quelle con maggior frequenza, ma sembrerebbe che in questo subreddit ci siano anche discussioni sui temi generali delle cryptovalute, per esempio _liquidity pool_, _seed phrase_ e _smart chain_. Questo può star a indicare che nella comunità di PancakeSwap ci siano persone un po' meno esperte che cercano consigli o espongono dubbi sul mondo delle cryptovalute, bisognerebbe però approfondire meglio il contesto di ciascun bigramma. 
 
 ```{r crop=TRUE}
 bigrams_class_sentiment <- words.classSentiment(bigrams_counts, n_filter_sentiment = 200, ngrams = 2)
 ```
 
-Considerando le classi dei sentimenti sui bigrammi la situazione cambia un poco. Infatti i sentimenti positivi risultano maggiori, ma sempre con un po' di incertezza considerando i bigrammi in cui viene associato il sentimento di fiducia con sentimenti negativi. 
+Anche riguardo i sentimenti possiamo notare una differenza con 
 
 ```{r  crop=TRUE}
 bigrams_sentiment <- words.computeSentiment(bigrams_counts, n_filter = 2, ngrams = 2)
 #saveRDS(bigrams_sentiment, paste0("../Data/", dataset, "_bigrams_sentiment.rds")
 ```
-Similmente andando a classificare ciascuna parola in una scala da 0 a 1, che indica la positività di un bigramma, il numero di parole negative sembra essere molto minore a quelle positive. 
+
+Si hanno anche un numero molto minore di parole considerate negativa, teniamo però conto che esiste un enorme differenza tra il numero di dati raccolti per Dogecoin rispetto a quelli per PancakeSwap.
 
 ```{r  crop=TRUE}
 words.network(bigrams_counts, n_filter = 30)
 ```
 
-Dalle rete delle parole, con conteggi superiori a 2000, possiamo cogliere altre informazioni molto interessanti, come l'accostamento delle parole right e dips, che in ambito finanziario si potrebbero associare allo slogan "Buy the dips", con il significato di comprare un asset successivamente al suo crollo di prezzo. Un'altra osservazione può esser fatta sulla parola "buy" che presenta un numero di archi collegati superiore alla maggior parte delle parole oltre a 'doge'. 
-   
-Inoltre, a confermare l'ipotesi che gli utenti spingano all'acquisto e possesso di questa cryptovaluta, c'è l'accostamento della parola "stop" con "selling", proprio per incentivare a non vendere e quindi a non far calare di prezzo il valore dei dogecoin. 
- 
 
 ```{r}
 remove(tidy_bigrams, clean_tidy_bigrams)
@@ -277,10 +270,6 @@ bigrams_sentiment <- words.computeSentiment(bigrams_counts, n_filter = 2, ngrams
 words.network(bigrams_counts, n_filter = 30)
 ```
 
-Dalle rete delle parole, con conteggi superiori a 2000, possiamo cogliere altre informazioni molto interessanti, come l'accostamento delle parole right e dips, che in ambito finanziario si potrebbero associare allo slogan "Buy the dips", con il significato di comprare un asset successivamente al suo crollo di prezzo. Un'altra osservazione può esser fatta sulla parola "buy" che presenta un numero di archi collegati superiore alla maggior parte delle parole oltre a 'doge'. 
-   
-Inoltre, a confermare l'ipotesi che gli utenti spingano all'acquisto e possesso di questa cryptovaluta, c'è l'accostamento della parola "stop" con "selling", proprio per incentivare a non vendere e quindi a non far calare di prezzo il valore dei dogecoin. 
- 
 
 ```{r}
 remove(tidy_bigrams)
@@ -348,27 +337,15 @@ textplot_wordcloud(dff, min_count = 200,
 remove(dff, tidy)
 ```
 
-Tra le parole più presenti, oltre a doge, possiamo notare parole come: 
-- buy
-- hold
-- moon
-- invest/keep
-
 
 ```{r  crop=TRUE}
 words.classSentiment(word_counts)
 ```
 
-Tenendo conto che molte parole, magari offensive, vengano utilizzante in discussioni che non c'entrano molto con il mercato della moneta, la divisione in classi dei sentimenti ci fa vedere come ci sia 
-
 
 ```{r  crop=TRUE}
-doge_word_sentiment <- words.computeSentiment(word_counts, n_filter = 10)
+word_sentiment <- words.computeSentiment(word_counts, n_filter = 10)
 ```
-
-In questo grafico possiamo trovare parole interessanti divise in base alla loro positività. Nella parte negativa si può notare subito come 'dump', termine che in finanza significherebbe far sgonfiare il prezzo, sia molto utilizzata e attorno una serie di parole che non sono legate alla fiducia, ma al contrario fanno capire come il mercato di questa moneta non sia percepito come non stabile. Dall'altra parte ci sono parole che cercano di ingoraggiare all'investimento in dogecoin. 
-
-Andiamo però a visualizzare i bigrammi per vedere se queste parole prese con un minimo di contesto facciano presumere le stesse ipotesi. 
 
 
 ```{r include = FALSE}
@@ -393,28 +370,21 @@ bigrams_counts <- corpus.countPlot_tidy(clean_tidy_bigrams,
 
 ```
 
-Analizzando i bigrammi si può notare ancor più maggiormente che la gran parte delle parole si riferiscono a spingere gli utenti ad acquistare e mantenere i dogecoin nel proprio wallet digitale. 
 
 ```{r crop=TRUE}
 bigrams_class_sentiment <- words.classSentiment(bigrams_counts, n_filter_sentiment = 200, ngrams = 2)
 ```
 
-Considerando le classi dei sentimenti sui bigrammi la situazione cambia un poco. Infatti i sentimenti positivi risultano maggiori, ma sempre con un po' di incertezza considerando i bigrammi in cui viene associato il sentimento di fiducia con sentimenti negativi. 
 
 ```{r crop=TRUE}
 bigrams_sentiment <- words.computeSentiment(bigrams_counts, n_filter = 2, ngrams = 2)
 #saveRDS(bigrams_sentiment, paste0("../Data/", dataset, "_bigrams_sentiment.rds")
 ```
-Similmente andando a classificare ciascuna parola in una scala da 0 a 1, che indica la positività di un bigramma, il numero di parole negative sembra essere molto minore a quelle positive. 
 
 ```{r crop=TRUE}
 words.network(bigrams_counts, n_filter = 30)
 ```
 
-Dalle rete delle parole, con conteggi superiori a 2000, possiamo cogliere altre informazioni molto interessanti, come l'accostamento delle parole right e dips, che in ambito finanziario si potrebbero associare allo slogan "Buy the dips", con il significato di comprare un asset successivamente al suo crollo di prezzo. Un'altra osservazione può esser fatta sulla parola "buy" che presenta un numero di archi collegati superiore alla maggior parte delle parole oltre a 'doge'. 
-   
-Inoltre, a confermare l'ipotesi che gli utenti spingano all'acquisto e possesso di questa cryptovaluta, c'è l'accostamento della parola "stop" con "selling", proprio per incentivare a non vendere e quindi a non far calare di prezzo il valore dei dogecoin. 
- 
 
 ```{r}
 remove(tidy_bigrams)
@@ -481,22 +451,15 @@ textplot_wordcloud(dff, min_count = 200,
 remove(dff)
 ```
 
-Tra le parole più presenti, oltre a doge, possiamo notare parole come: 
-- buy
-- hold
-- moon
-- invest/keep
 
 
 ```{r crop=TRUE}
 words.classSentiment(word_counts)
 ```
 
-Tenendo conto che molte parole, magari offensive, vengano utilizzante in discussioni che non c'entrano molto con il mercato della moneta, la divisione in classi dei sentimenti ci fa vedere come ci sia 
-
 
 ```{r  crop=TRUE}
-doge_word_sentiment <- words.computeSentiment(word_counts, n_filter = 10)
+word_sentiment <- words.computeSentiment(word_counts, n_filter = 10)
 ```
 
 In questo grafico possiamo trovare parole interessanti divise in base alla loro positività. Nella parte negativa si può notare subito come 'dump', termine che in finanza significherebbe far sgonfiare il prezzo, sia molto utilizzata e attorno una serie di parole che non sono legate alla fiducia, ma al contrario fanno capire come il mercato di questa moneta non sia percepito come non stabile. Dall'altra parte ci sono parole che cercano di ingoraggiare all'investimento in dogecoin. 
@@ -521,7 +484,8 @@ clean_tidy_bigrams <- corpus.clean_tidy(tidy_bigrams$tidy,
                                                      ngrams = 2)
 remove(tidy_bigrams)
 bigrams_counts <- corpus.countPlot_tidy(clean_tidy_bigrams, 
-                                        threshold_count = 25,
+                                        threshold_freq = 0.001,
+                                        threshold_count = 75,
                                                    ngrams = 2)
 
 ```
@@ -541,7 +505,7 @@ bigrams_sentiment <- words.computeSentiment(bigrams_counts, n_filter = 2, ngrams
 Similmente andando a classificare ciascuna parola in una scala da 0 a 1, che indica la positività di un bigramma, il numero di parole negative sembra essere molto minore a quelle positive. 
 
 ```{r crop=TRUE}
-words.network(bigrams_counts, n_filter = 30)
+words.network(bigrams_counts, n_filter = 75)
 ```
 
 Dalle rete delle parole, con conteggi superiori a 2000, possiamo cogliere altre informazioni molto interessanti, come l'accostamento delle parole right e dips, che in ambito finanziario si potrebbero associare allo slogan "Buy the dips", con il significato di comprare un asset successivamente al suo crollo di prezzo. Un'altra osservazione può esser fatta sulla parola "buy" che presenta un numero di archi collegati superiore alla maggior parte delle parole oltre a 'doge'. 
