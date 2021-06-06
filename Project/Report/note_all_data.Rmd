@@ -1,30 +1,35 @@
 ---
-title: "Analysis of topics about cryptocurrencies on Reddit"
+title: "Other Subreddit's Data"
 author: "Riccardo Ferrarese"
 date: "19/3/2021"
 output:
+  html_document:
+    df_print: paged
   pdf_document: 
     latex_engine: xelatex
     toc: true
     toc_depth: 2
-  html_document:
-    df_print: paged
 ---
 
-Questo report contiene l'analisi di base anche sugli altri subreddit. 
+Questo report contiene l'analisi di base riguardo gli altri subreddit scaricati.  
 
-```{r setup, echo=FALSE}
+```{r setup, echo=FALSE, result = 'hide' }
 knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE, 
                       python.reticulate=FALSE, 
                       echo = TRUE, 
                       warning = FALSE, 
                       cache = TRUE, 
-                      message = FALSE, 
-                      results = 'hide', 
-                      out.width = "80%"
-)
+                      message = FALSE,
+                      out.width = "60%", 
+                      fig.align="center"
+                      )
 knitr::knit_hooks$set(crop = knitr::hook_pdfcrop) 
+knitr::knit_hooks$set(optipng = knitr::hook_optipng)
+hook_output <- knitr::knit_hooks$get("output")
 
+
+source("../src/lib.R")
+source("../src/functions.R")
 
 ```
    
@@ -34,7 +39,6 @@ Come prima cosa scarichiamo i dati riguardanti il subreddit da analizzare.
 
 ```{r}
 
-source("../src/lib.R")
 save <- FALSE
 dataset <- 'pancakeswap'
 
@@ -55,7 +59,9 @@ if(save){ data <- readRDS(paste0("../Data/", dataset, ".rds")) }
 
 print_("REDDIT's COMMENT DF: ")
 data$df_comm %>%
-   select(id, date, author)
+   select(id, date, author) %>%
+   head(3)
+
 print_("REDDIT's POST DF: ")
 summary(data$df_post)
 ```
@@ -95,7 +101,7 @@ A differenza della _wordcloud_ fatta per il subreddit di Dogecoin possiamo notar
 ```{r crop=TRUE}
 words.classSentiment(word_counts)
 ```
-
+Troviamo anche una differenza minore tra sentimenti positivi e negativi, ma rimane comunque bilanciato a causa delle incertezze dovute all'investire in un mercato con molta volatilità. Questo può esser confermato anche dalla classificazione dei termini sottostante. 
 
 
 ```{r crop=TRUE}
@@ -108,6 +114,7 @@ remove(word_counts)
 remove(word_sentiment)
 ```
 
+Si va quindi ad analizzare i bigrammi per vedere se le ipotesi fatte sopra sia rispettate anche tenendo conto delle parole adiacenti. 
 
 ```{r  crop=TRUE}
 
@@ -130,8 +137,6 @@ Analizzando i bigrammi si può notare ancora la notevole differenza con i bigram
 ```{r crop=TRUE}
 bigrams_class_sentiment <- words.classSentiment(bigrams_counts, n_filter_sentiment = 200, ngrams = 2)
 ```
-
-Anche riguardo i sentimenti possiamo notare una differenza con 
 
 ```{r  crop=TRUE}
 bigrams_sentiment <- words.computeSentiment(bigrams_counts, n_filter = 2, ngrams = 2)
@@ -159,7 +164,7 @@ remove(bigrams_sentiment)
 Come prima cosa scarichiamo i dati riguardanti il subreddit da analizzare.
 Nel Dataset riguardante il subreddit di Reddit abbiamo un milione e seicento mila osservazioni, per limitare l'uso di memoria si va ad analizzare solo i commenti in merito all'anno 2021. 
 
-```{r }
+```{r bitcoin}
 
 save = FALSE
 dataset='bitcoin'
@@ -181,7 +186,9 @@ if(save){ data <- readRDS(paste0("../Data/", dataset, ".rds")) }
 
 print_("REDDIT's COMMENT DF: ")
 data$df_comm %>%
-   select(id, date, author)
+  select(id, date, author) %>%
+  head(3)
+
 print_("REDDIT's POST DF: ")
 summary(data$df_post)
 ```
@@ -199,12 +206,10 @@ com_corpus_ <- corpus_subset(com_corpus, data > as.Date("2020-12-31") )
 remove(com_corpus)
 
 # remove stopwords!!              
-tidy <- corpus.tokenize_dfmTidy(com_corpus_, 
-                                     spell_checking = TRUE )
-
-  
+tidy <- corpus.tokenize_dfmTidy(com_corpus_)
 clean_tidy <- corpus.clean_tidy(tidy$tidy, mode='stem' )
-word_counts <- corpus.countPlot_tidy(clean_tidy, threshold_count = 1000)
+word_counts <- corpus.countPlot_tidy(clean_tidy, 
+                                     threshold_count = 5000)
 remove(clean_tidy)
 ```
 
@@ -216,12 +221,10 @@ dff <- tidy$dfm
 # colour of words from least to most frequent
 textplot_wordcloud(dff, min_count = 10000,
      color = c('grey', 'red', 'green3', 'purple', 'orange', 'blue3'))
-```
-
-
-```{r}
 remove(dff, tidy)
 ```
+Anche in questo caso si parla di _wallet_ e non troviamo una grossa differenza come in dogecoin riguardo parole come 'buy' e 'hold' rispetto tutti gli altri termini. 
+
 
 ```{r  crop=TRUE}
 words.classSentiment(word_counts)
@@ -243,31 +246,34 @@ tidy_bigrams <- corpus.tokenize_dfmTidy(com_corpus_,
                                           dfm_b = FALSE,
                                           spell_checking = FALSE, 
                                           ngrams=2)
+remove(com_corpus_)
 
 clean_tidy_bigrams <- corpus.clean_tidy(tidy_bigrams$tidy,
                                                      ngrams = 2)
 remove(tidy_bigrams)
-bigrams_counts <- corpus.countPlot_tidy(clean_tidy_bigrams, 
-                                        threshold_freq = 0.001,
-                                        threshold_count = 9000,
-                                                   ngrams = 2)
 
+bigrams_counts <- corpus.countPlot_tidy(clean_tidy_bigrams, 
+                                        threshold_freq = 0.0001,
+                                        threshold_count = 1000,
+                                                   ngrams = 2)
+remove(clean_tidy_bigrams)
 ```
 
+Anche i bigrammi ci confermano che le discussioni in questo subreddit non sono solamente incentrate sull'acquisto della moneta, ma tra le più frequenti compaiono anche parole come _private key_, _original article_, _hardware wallet_. 
 
 ```{r  crop=TRUE}
-bigrams_class_sentiment <- words.classSentiment(bigrams_counts, n_filter_sentiment = 200, ngrams = 2)
+bigrams_class_sentiment <- words.classSentiment(bigrams_counts, n_filter_sentiment = 10000, ngrams = 2)
 ```
 
 
 ```{r crop=TRUE}
-bigrams_sentiment <- words.computeSentiment(bigrams_counts, n_filter = 2, ngrams = 2)
+bigrams_sentiment <- words.computeSentiment(bigrams_counts, n_filter = 7, ngrams = 2)
 #saveRDS(bigrams_sentiment, paste0("../Data/", dataset, "_bigrams_sentiment.rds")
 ```
 
 
 ```{r crop=TRUE}
-words.network(bigrams_counts, n_filter = 30)
+words.network(bigrams_counts, n_filter = 2000)
 ```
 
 
@@ -284,7 +290,7 @@ remove(bigrams_sentiment)
 
 Come prima cosa scarichiamo i dati riguardanti il subreddit da analizzare.
 
-```{r }
+```{r eth}
 
 save = FALSE
 dataset='ethtrader'
@@ -306,7 +312,9 @@ if(save){ data <- readRDS(paste0("../Data/", dataset, ".rds")) }
 
 print_("REDDIT's COMMENT DF: ")
 data$df_comm %>%
-   select(id, date, author)
+  select(id, date, author)%>%
+  head(3)
+
 print_("REDDIT's POST DF: ")
 summary(data$df_post)
 ```
@@ -322,8 +330,9 @@ tidy <- corpus.tokenize_dfmTidy(com_corpus,
                                      spell_checking = TRUE, 
                                      mode_correction = 0)
 clean_tidy <- corpus.clean_tidy(tidy$tidy, mode='stem' )
-word_counts <- corpus.countPlot_tidy(clean_tidy, threshold_count = 5)
-remove( clean_tidy)
+
+word_counts <- corpus.countPlot_tidy(clean_tidy, threshold_count = 500)
+remove(clean_tidy)
 ```
 
 ```{r, crop=TRUE}
@@ -365,29 +374,29 @@ clean_tidy_bigrams <- corpus.clean_tidy(tidy_bigrams$tidy,
                                                      ngrams = 2)
 remove(tidy_bigrams)
 bigrams_counts <- corpus.countPlot_tidy(clean_tidy_bigrams, 
-                                        threshold_count = 25,
+                                        threshold_count = 300,
                                                    ngrams = 2)
 
+remove(clean_tidy_bigrams)
 ```
 
 
 ```{r crop=TRUE}
-bigrams_class_sentiment <- words.classSentiment(bigrams_counts, n_filter_sentiment = 200, ngrams = 2)
+bigrams_class_sentiment <- words.classSentiment(bigrams_counts, n_filter_sentiment = 3000, ngrams = 2)
 ```
 
 
 ```{r crop=TRUE}
-bigrams_sentiment <- words.computeSentiment(bigrams_counts, n_filter = 2, ngrams = 2)
+bigrams_sentiment <- words.computeSentiment(bigrams_counts, n_filter = 4, ngrams = 2)
 #saveRDS(bigrams_sentiment, paste0("../Data/", dataset, "_bigrams_sentiment.rds")
 ```
 
 ```{r crop=TRUE}
-words.network(bigrams_counts, n_filter = 30)
+words.network(bigrams_counts, n_filter = 25)
 ```
 
 
-```{r}
-remove(tidy_bigrams)
+```{r inlude = FALSE}
 remove(bigrams_counts)
 
 remove(bigrams_class_sentiment)
@@ -396,9 +405,10 @@ remove(bigrams_sentiment)
 
 ## ELON MUSK 
 
+Questo dataset non fa parte della tematica del report, ma si è andato ad analizzarlo per curiosità visto che il termini 'elon musk' risulta molto frequente nel reddit di dogecoin. 
 Come prima cosa scarichiamo i dati riguardanti il subreddit da analizzare.
 
-```{r }
+```{r elon}
 
 save = FALSE
 dataset='elonmusk'
@@ -420,7 +430,8 @@ if(save){ data <- readRDS(paste0("../Data/", dataset, ".rds")) }
 
 print_("REDDIT's COMMENT DF: ")
 data$df_comm %>%
-   select(id, date, author)
+  select(id, date, author) %>%
+  head(3)
 print_("REDDIT's POST DF: ")
 summary(data$df_post)
 ```
@@ -436,7 +447,7 @@ tidy <- corpus.tokenize_dfmTidy(com_corpus,
                                      spell_checking = TRUE, 
                                      mode_correction = 0)
 clean_tidy <- corpus.clean_tidy(tidy$tidy, mode='stem' )
-word_counts <- corpus.countPlot_tidy(clean_tidy, threshold_count = 100)
+word_counts <- corpus.countPlot_tidy(clean_tidy, threshold_count = 300)
 remove( clean_tidy)
 ```
 
@@ -447,7 +458,7 @@ set.seed(190)
 dff <- tidy$dfm
 # colour of words from least to most frequent
 textplot_wordcloud(dff, min_count = 200,
-     color = c('pink', 'red', 'green3', 'purple', 'orange', 'blue3'))
+     color = c('grey', 'red', 'green3', 'purple', 'orange', 'blue3'))
 remove(dff)
 ```
 
@@ -456,15 +467,11 @@ remove(dff)
 ```{r crop=TRUE}
 words.classSentiment(word_counts)
 ```
-
+Un osservazione che si può fare è che la divisione nei sentimenti dei termini è più o meno sempre la stessa, una maggioranza di termini negativi seguiti da quelli positivi, con fiducia e rabbia che si contrappongono e una presenza non scontata di paura. 
 
 ```{r  crop=TRUE}
 word_sentiment <- words.computeSentiment(word_counts, n_filter = 10)
 ```
-
-In questo grafico possiamo trovare parole interessanti divise in base alla loro positività. Nella parte negativa si può notare subito come 'dump', termine che in finanza significherebbe far sgonfiare il prezzo, sia molto utilizzata e attorno una serie di parole che non sono legate alla fiducia, ma al contrario fanno capire come il mercato di questa moneta non sia percepito come non stabile. Dall'altra parte ci sono parole che cercano di ingoraggiare all'investimento in dogecoin. 
-
-Andiamo però a visualizzare i bigrammi per vedere se queste parole prese con un minimo di contesto facciano presumere le stesse ipotesi. 
 
 
 ```{r include = FALSE}
@@ -484,7 +491,7 @@ clean_tidy_bigrams <- corpus.clean_tidy(tidy_bigrams$tidy,
                                                      ngrams = 2)
 remove(tidy_bigrams)
 bigrams_counts <- corpus.countPlot_tidy(clean_tidy_bigrams, 
-                                        threshold_freq = 0.001,
+                                        bool_plot_frequency = FALSE, 
                                         threshold_count = 75,
                                                    ngrams = 2)
 
@@ -496,23 +503,15 @@ Analizzando i bigrammi si può notare ancor più maggiormente che la gran parte 
 bigrams_class_sentiment <- words.classSentiment(bigrams_counts, n_filter_sentiment = 2000, ngrams = 2)
 ```
 
-Considerando le classi dei sentimenti sui bigrammi la situazione cambia un poco. Infatti i sentimenti positivi risultano maggiori, ma sempre con un po' di incertezza considerando i bigrammi in cui viene associato il sentimento di fiducia con sentimenti negativi. 
-
 ```{r  crop=TRUE}
 bigrams_sentiment <- words.computeSentiment(bigrams_counts, n_filter = 2, ngrams = 2)
 #saveRDS(bigrams_sentiment, paste0("../Data/", dataset, "_bigrams_sentiment.rds")
 ```
-Similmente andando a classificare ciascuna parola in una scala da 0 a 1, che indica la positività di un bigramma, il numero di parole negative sembra essere molto minore a quelle positive. 
+Interessante notare come nelle parole classificate come negative sia presente il termine rischio, probabilmente inteso verso le azioni delle sue aziende o verso le sue idee visionarie.
 
 ```{r crop=TRUE}
-words.network(bigrams_counts, n_filter = 75)
+words.network(bigrams_counts, n_filter = 150)
 ```
-
-Dalle rete delle parole, con conteggi superiori a 2000, possiamo cogliere altre informazioni molto interessanti, come l'accostamento delle parole right e dips, che in ambito finanziario si potrebbero associare allo slogan "Buy the dips", con il significato di comprare un asset successivamente al suo crollo di prezzo. Un'altra osservazione può esser fatta sulla parola "buy" che presenta un numero di archi collegati superiore alla maggior parte delle parole oltre a 'doge'. 
-   
-Inoltre, a confermare l'ipotesi che gli utenti spingano all'acquisto e possesso di questa cryptovaluta, c'è l'accostamento della parola "stop" con "selling", proprio per incentivare a non vendere e quindi a non far calare di prezzo il valore dei dogecoin. 
- 
-
 ```{r}
 remove(tidy_bigrams)
 remove(bigrams_counts)

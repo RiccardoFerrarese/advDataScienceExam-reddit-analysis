@@ -37,5 +37,3 @@ library("topicmodels")     # for topic modelling with LDA
 library("hunspell")
 library("SnowballC")       # lib for stemming words and more..
 
-
-
