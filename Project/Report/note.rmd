@@ -73,8 +73,8 @@ Il progetto è stato eseguito su una macchina Ubuntu avente un processore AMD Ry
 
 Per la gestione del progetto sono state utilizzati i seguenti pacchetti: 
 
-* installare [*git*](http://try.github.io/), sistema per il controllo del versionamento 
-* installare [*renv*](https://blog.rstudio.com/2019/11/06/renv-project-environments-for-r/), permette di creare un ambiente di esecuzione isolato per la gestione delle dipendenze. Permette anche di utilizzare il pacchetto _reticulate_ per integrare degli script in Python e gestire l'ambiente locale per la loro esecuzione.
+* [*git*](http://try.github.io/), sistema per il controllo del versionamento 
+*  [*renv*](https://blog.rstudio.com/2019/11/06/renv-project-environments-for-r/), permette di creare un ambiente di esecuzione isolato per la gestione delle dipendenze. Permette anche di utilizzare il pacchetto _reticulate_ per integrare degli script in Python e gestire l'ambiente locale per la loro esecuzione.
 
 
 Per eseguire il progetto in R, dopo aver clonato il repository da github, è necessario impostare la working directory per installare i pacchetti necessari e utilizzare le funzioni del pacchetto _renv_: 
@@ -1204,17 +1204,17 @@ remove(data)
 ```
 
 ```{r bigrams-stat}
-
+# problem in knit
 com_doge <- corpus.tokenize_dfmTidy(comm_corpus, ngrams = 2, dfm_b = FALSE)
 remove(comm_corpus)
 
-post_doge <- corpus.tokenize_dfmTidy(post_corpus, ngrams = 2, dfm_b = FALSE)
+# post_doge <- corpus.tokenize_dfmTidy(post_corpus, ngrams = 2, dfm_b = FALSE)
 
 com_tidy <- com_doge
-post_tidy <- post_doge
+# post_tidy <- post_doge
 
 remove(com_doge)
-remove(post_doge)
+# remove(post_doge)
 ```
 
 ```{r}
@@ -1228,16 +1228,16 @@ print(com_clean_bigram_dfm)
 remove(com_clean_tidy)
 remove(com_clean_bigram_dfm)
 
-post_clean_tidy <- corpus.clean_tidy(post_tidy, ngrams = 2)
-remove(post_tidy)
-
-print_("CLEAN POST CORPUS: ")
-post_clean_bigram_dfm <- post_clean_tidy %>%
-   cast_dfm(document, words, count)
-print(post_clean_bigram_dfm)
+# post_clean_tidy <- corpus.clean_tidy(post_tidy, ngrams = 2)
+# remove(post_tidy)
+# 
+# print_("CLEAN POST CORPUS: ")
+# post_clean_bigram_dfm <- post_clean_tidy %>%
+#    cast_dfm(document, words, count)
+# print(post_clean_bigram_dfm)
 ```
 
-###### Summary table
+### Summary table
 
 Si mostra la tabella di contingenza prima di aver applicato la correzione del dizionario: 
 
@@ -1667,9 +1667,7 @@ head(toks2, 5)
 
 Uniamo questa logica alla funzione _corpus.tokenize_dfmTidy_ che abbiamo definito precedentemente, in tal modo tramite argomento potremmo scegliere se utilizzare la sostituzione delle parole o meno. 
 
-Possiamo così creare il nostro nuovo corpus, sostituendo tutte le parole presenti nel nostro dizionario con la loro correzione. 
-
-Si potrebbe correggere tutte le parole restanti (quelle con conteggi minori) utilizzando la lemmatizzazione. 
+Possiamo così creare il nostro nuovo corpus, sostituendo tutte le parole presenti nel nostro dizionario con la loro correzione. Si potrebbe correggere tutte le parole restanti (quelle con conteggi minori) utilizzando la lemmatizzazione. 
 
 
 ```{r}
@@ -2011,7 +2009,7 @@ remove(doge_word_sentiment)
 ```
 
 
-```{r doge-bigrams, crop=TRUE}
+```{r doge-bigrams, eval=FALSE, crop=TRUE}
 
 doge_tidy_bigrams <- corpus.tokenize_dfmTidy(doge_corpus, 
                                           dfm_b = FALSE,
@@ -2022,9 +2020,6 @@ doge_tidy_bigrams <- corpus.tokenize_dfmTidy(doge_corpus,
 doge_clean_tidy_bigrams <- corpus.clean_tidy(doge_tidy_bigrams$tidy,
                                                      ngrams = 2)
 remove(doge_tidy_bigrams)
-doge_bigrams_counts <- corpus.countPlot_tidy(doge_clean_tidy_bigrams, 
-                                                   threshold_freq = 0.0003,
-                                                   ngrams = 2)
 
 saveRDS(doge_clean_tidy_bigrams, "../Data/bigrams_clean.rds")
 ```
@@ -2032,6 +2027,11 @@ saveRDS(doge_clean_tidy_bigrams, "../Data/bigrams_clean.rds")
 Analizzando i bigrammi si può notare ancor più maggiormente che la gran parte delle parole si riferiscono a spingere gli utenti ad acquistare e mantenere i dogecoin nel proprio wallet digitale. 
 
 ```{r doge-bigrams-sentiment, crop=TRUE}
+doge_clean_tidy_bigrams <- readRDS("../Data/bigrams_clean.rds")
+doge_bigrams_counts <- corpus.countPlot_tidy(doge_clean_tidy_bigrams, 
+                                                   threshold_freq = 0.0003,
+                                                   ngrams = 2)
+
 bigrams_class_sentiment <- words.classSentiment(doge_bigrams_counts, n_filter_sentiment = 10000, ngrams = 2)
 ```
 
@@ -2053,7 +2053,7 @@ Dalle rete delle parole, con conteggi superiori a 2000, possiamo cogliere altre 
 Inoltre, a confermare l'ipotesi che gli utenti spingano all'acquisto e possesso di questa cryptovaluta, c'è l'accostamento della parola "stop" con "selling", proprio per incentivare a non vendere e quindi a non far calare di prezzo il valore dei dogecoin. 
  
 
-```{r}
+```{r include = FALSE}
 remove(doge_tidy_bigrams)
 remove(doge_bigrams_counts)
 
@@ -2061,6 +2061,86 @@ remove(bigrams_class_sentiment)
 remove(bigrams_sentiment)
 ```
 
+### Topic Analysis 
+
+Per eseguire l'analisi degli argomenti siamo andati a considerare come un unico testo tutti i commenti di uno stesso post. 
+
+```{r, crop=TRUE}
+
+data <- readRDS("../Data/dogecoin.rds")
+doge_corpus <- data$corpus_post
+remove(data)
+
+# remove stopwords!!              
+doge_tidy <- corpus.tokenize_dfmTidy(doge_corpus, 
+                                     spell_checking = TRUE, 
+                                     mode_correction = 0)
+
+dfm_doge <- doge_tidy$dfm
+remove(doge_tidy, doge_corpus)
+
+```
+
+La document term matrix risulta avere dimensioni troppo grandi per poterla utilizzare. Andiamo quindi ad utilizzare la fuzione _dfm\_trim_ per ridurre la sparisità della matrice. 
+
+```{r}
+dfmTrimmed <- dfm_trim(dfm_doge, min_docfreq = 100, min_termfreq = 2500)
+remove(dfm_doge)
+
+dfmTrimmed
+```
+
+Per applicare la funzione LDA, è necessario che ogni riga della matrice di input contenga almeno una entry diversa da zero. Si deve quindi eliminare quei documenti in cui la somma delle frequenze di una parola è pari a zero. 
+
+```{r}
+# delete row with all zeros 
+rowSum <- apply(dfmTrimmed , 1, sum)
+dfmTrimmed <- dfmTrimmed[rowSum> 0, ]
+remove(rowSum)
+
+library(topicmodels)
+# Latent Dirichlet allocation
+doge_lda <- LDA(dfmTrimmed, k = 4, control = list(seed = 123456789))
+doge_lda
+```
+
+Si va poi ad estrarre le probilità per ciascuna parola di appartenere ad un certo topic estratto. 
+
+```{r}
+doge_topics <- tidy(doge_lda, matrix = 'beta')
+```
+
+E ad analizzare i risultati ottenuti:
+
+```{r}
+
+# the 10 terms that are most common within each topic
+doge_top_terms <- doge_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+doge_top_terms
+
+doge_top_terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip() +
+  scale_x_reordered()
+```
+
+Come ci si poteva aspettare, essendo dei post già riferiti ad un solo argomento la classificazione in topic non risulta molto utile all'analisi. Nonostante ciò possiamo identificare delle relazioni tra le parole nei diversi topic. 
+
+Per esempio il topic numero 1 ha come argomento principale il dogecoin stesso, quali sono le parole più associate a lui come _binance_ (il wallet da cui si può comprare o vendere la cryptovaluta), _moon_ per il motto che il prezzo toccherà il cielo o _robinhood_ probabilmente riferito al fatto che dogecoin è una moneta che ha ancora un prezzo molto basso ma che ha permesso l'investimento e guadagno anche di coloro che sognavano i Bitcoin. 
+
+Il topic numero 4 invece sembra riferirsi maggiormente all'ambito finanziario di investimenti. Le altre due classificazioni invece non sembrano avere una tematica comune chiara. 
+
+```{r include = FALSE}
+remove(dfmTrimmed, doge_lda, doge_top_terms, doge_topics)
+```
 
 ### Comments per Time 
 
@@ -2106,9 +2186,9 @@ plot_com_per_date(doge_df)
 ```
 
 Possiamo identificare così i periodi di maggior attività degli utenti: 
-- Luglio 2020
-- Febbraio 2021
-- Aprile/Maggio 2021
+* Luglio 2020
+* Febbraio 2021
+* Aprile/Maggio 2021
 
 
 Come riportato da alcune notizie online il 13 luglio 2020, dopo una settimana di video virali su TikTok, Dogecoin è cresciuto del 35% in prezzo e del 2.000% in volume. Da quel momento in poi l'interesse per dogecoin è sempre più aumentato tra gli investitori. Oltre alla comparsa su TikTok si hanno i tweet scritti dal noto Elon Musk a inizio 2021, che hanno fatto ancor più crescere l'interesse verso questo mercato nell'anno corrente. 
@@ -2158,8 +2238,7 @@ p <- ggplot(historical_data) +
 ```
 
 
-Per avere l'accesso ai dati storici completi è necessario possedere la versione non base delle API messe a disposizione da CoinMarketCap.
-Utilizziamo allora i dati recuperati da *Yahoo! Finance*. Carichiamoli e prepariamoli per esser visualizzati. 
+Per avere l'accesso ai dati storici completi è necessario possedere la versione avanzata delle API messe a disposizione da CoinMarketCap. Utilizziamo allora i dati recuperati da *Yahoo! Finance*. Carichiamoli e prepariamoli per esser visualizzati. 
 
 ```{r}
 
@@ -2224,9 +2303,9 @@ Per dare un sentimento ad ogni commento, una volta asseganti i sentimenti a cias
 
 Si è scelto di utilizzare il concetto di polarità unendolo alla tecnica _Lexicon based_ che consiste nel conteggiare il numero di parole positive e negative per assegnare alla frase il sentimento più presente. Si ha quindi per ogni bigramma il suo corrispondete sentimento, che può essere positivo, negativo oppure neutro, successivamente andremo a calcolare il numero di bigrammi per ogni frase in modo da tener conto di questo nel calcolare il valore di sentimento finale per ciascun id corrispondente ad ogni comment. 
 
-"""
+```
 Con la funzione _words.computeSentiment_ abbiamo definito come assegnare a ciascuna parola il valore rappresentativo per il sentimento. In questa sezione è invece necessario trovare una strategia per rappresentare il sentimento dell'intero commento. 
-"""
+```
 
 ```{r def-sent-per-comm}
 
@@ -2292,6 +2371,7 @@ Per calcolare la polarità di un sentimento si è utilizzata la seguente formula
 $$
    polarity = (pos + neut*0.4) - (neg + neut*0.6)
 $$
+
 Rispetto al calcolo di polarità classico, cioè sottraendo gli elementi negativi da quelli positivi, si è deciso di distribuire il peso degli elementi neutri in entrambi i membri della sottrazione. Successivamente questo valore sarà passato a una funzione che ne permette di normalizzare il dominio tra -1 e 1, la tangete iperbolica. 
 
 ```{r}
@@ -2799,8 +2879,8 @@ graph_undir %>%
 Se andiamo a visualizzare le misure di centralità utilizzate si può vedere come siano costanti per ogni nodo, questo perchè si sono considerati pochi nodi ed essendo il grafo risultante è completo. Se andavamo a considerare ogni singolo commento, il numero di archi entranti/uscenti dei nodi sarebbero in numero diversi. 
    
 Si è andati ad utilizzare due misure di centralità sui nodi: 
-- centralità con il metodo degli autovettori, dal momento che si è utilizzato un grafo indiretto per misurare l'importanza
-- betweenness centrality, per misurare i nodi più influenti
+* centralità con il metodo degli autovettori, dal momento che si è utilizzato un grafo indiretto, per misurare l'importanza degli utenti
+* betweenness centrality, per misurare l'influenza dei nodi 
 
 
 ```{r}
@@ -2823,7 +2903,6 @@ In questo caso la betweeness potrebbe essere intesa come l'influeza che un nodo 
 remove(graph, graph_undir)
 ```
 
-Si è scelto di utlizzare la _eigenvector centrality_ e non il _pageRank_ essendo il grafo non diretto
 
 ##### 50 top users Network
 
