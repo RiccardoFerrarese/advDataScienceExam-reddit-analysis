@@ -507,6 +507,7 @@ bigrams_class_sentiment <- words.classSentiment(bigrams_counts, n_filter_sentime
 bigrams_sentiment <- words.computeSentiment(bigrams_counts, n_filter = 2, ngrams = 2)
 #saveRDS(bigrams_sentiment, paste0("../Data/", dataset, "_bigrams_sentiment.rds")
 ```
+
 Interessante notare come nelle parole classificate come negative sia presente il termine rischio, probabilmente inteso verso le azioni delle sue aziende o verso le sue idee visionarie.
 
 ```{r crop=TRUE}

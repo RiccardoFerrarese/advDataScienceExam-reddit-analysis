@@ -56,15 +56,15 @@ Si è quindi andati ad analizzare i subreddit relativi a DogeCoin, PancakeSwap, 
 
 Prima di iniziare la discussione del lavoro, si elencano quelle che sono state le domande principali poste una volta scelto il dominio per l'analisi: 
 
-- Chi sono gli utenti maggiormente attivi?
+* Chi sono gli utenti maggiormente attivi?
 
-- Quali sono le parole e i bigrammi più utilizzati? 
+* Quali sono le parole e i bigrammi più utilizzati? 
 
-- Ci potrebbe essere una relazione tra i sentimenti dei commenti e gli eventi sociali/economici relativi hai ai temi?
+* Ci potrebbe essere una relazione tra i sentimenti dei commenti e gli eventi sociali/economici relativi hai ai temi?
  
-- Gli utenti più attivi possono esser considerati affidabili? 
+* Gli utenti più attivi possono esser considerati affidabili? 
 
-- Tra le diverse comunità c'è una differenza nel modo di esprimersi e negli argomenti trattati? 
+* Tra le diverse comunità c'è una differenza nel modo di esprimersi e negli argomenti trattati? 
 
 
 ## Setup App
@@ -73,8 +73,8 @@ Il progetto è stato eseguito su una macchina Ubuntu avente un processore AMD Ry
 
 Per la gestione del progetto sono state utilizzati i seguenti pacchetti: 
 
-- installare [*git*](http://try.github.io/), sistema per il controllo del versionamento 
-- installare [*renv*](https://blog.rstudio.com/2019/11/06/renv-project-environments-for-r/), permette di creare un ambiente di esecuzione isolato per la gestione delle dipendenze. Permette anche di utilizzare il pacchetto _reticulate_ per integrare degli script in Python e gestire l'ambiente locale per la loro esecuzione.
+* installare [*git*](http://try.github.io/), sistema per il controllo del versionamento 
+* installare [*renv*](https://blog.rstudio.com/2019/11/06/renv-project-environments-for-r/), permette di creare un ambiente di esecuzione isolato per la gestione delle dipendenze. Permette anche di utilizzare il pacchetto _reticulate_ per integrare degli script in Python e gestire l'ambiente locale per la loro esecuzione.
 
 
 Per eseguire il progetto in R, dopo aver clonato il repository da github, è necessario impostare la working directory per installare i pacchetti necessari e utilizzare le funzioni del pacchetto _renv_: 
@@ -125,11 +125,7 @@ library(microbenchmark)
 library(quanteda.textstats)
 ```
 
-
-
-Per installare l'ambiente necessario ad eseguire lo script in python e per eseguire l'analisi in R è consigliato installare un ambiente con conda. 
-
-Se eventualmente si vuole salvare i dataframe parziali di certe operazioni, come oggetti RDS, è necessario impostare la seguente variabile a TRUE. In qualsiasi caso il codice è stato scritto in modo tale da non rendere obbligatorio il salvataggio dei dati. 
+Per installare l'ambiente necessario ad eseguire lo script in python e per eseguire l'analisi in R è consigliato installare un ambiente conda. Se eventualmente si vuole salvare i dataframe parziali di certe operazioni, come oggetti RDS, è necessario impostare la seguente variabile a TRUE. In qualsiasi caso il codice è stato scritto in modo tale da non rendere obbligatorio il salvataggio dei dati. 
 
 
 ```{r}
@@ -153,8 +149,7 @@ Pur permettendo agli utenti di mantenere l'anonimicità utilizzando un nome uten
 
 ## Collect Data with Python
 
-Per la raccolta dati è stato utilizzato Python dal momento che è presente la libreria _Pushshift_ per l'estrazione dei dati di Reddit senza vincoli stringenti sulle richieste effettuate. 
-E' stato utilizzato un wrapper delle Python Reddit API, **pmaw**, che permette di eseguire lo scrapping dei dati utilizzando il multithreading, in modo tale da rendere più efficente il processo di raccolta dei dati.
+Per la raccolta dati è stato utilizzato Python dal momento che è presente la libreria _Pushshift_ per l'estrazione dei dati di Reddit senza vincoli stringenti sulle richieste effettuate e essendo che la libreria per R ha dato problemi scaricando dati non completi. E' stato utilizzato un wrapper delle Python Reddit API, **pmaw**, che permette di eseguire lo scrapping dei dati utilizzando il multithreading, in modo tale da rendere più efficente il processo di raccolta dei dati.
 
 Le API mettono a disposizione una serie di funzioni per la ricerca dei post d'interesse, potendo specificare l'intervallo temporale e i subreddit in cui eseguire la ricerca. Inoltre, volendo estrarre da Reddit le informazioni relative a diversi subreddit è stata utilizzata la libreria _multiprocessing_ per lanciare un _pool_ di processi incaricati di eseguire la stessa funzione su dati diversi. 
 
@@ -255,7 +250,7 @@ class Miner(object):
         print(f"write {self.subreddit}_com.csv")
 ```
 
-E' stato utilizzato un _rate-limit_ per imposta un numero di richieste all'API pari a 100 al minuto, leggermente superiore al limite di default (1 richesta per secondo) ma leggermente inferiore al limite imposto dalle richieste al minuto massime che si possono effettuare senza subire un ritardo. 
+E' stato utilizzato un _rate-limit_ per impostare un numero di richieste all'API pari a 100 al minuto, leggermente superiore al limite di default (1 richesta per secondo) ma leggermente inferiore al limite imposto dalle richieste al minuto massime che si possono effettuare senza subire ritardi nella risposta. 
 
 La funzione _decorator timeit_ permette inoltre di avere una misura indicativa del tempo impiegato per ogni richiesta.
 Di seguito è mostrato un estratto di output da terminale che si ottiene dopo l'esecuzione del programma. 
@@ -963,10 +958,7 @@ words.network <- function(data, n_filter=1000){
 
 ## DogeCoin's Subreddit
 
-I primi dati che andremo ad analizzare sono quelli relativi al subreddit di DogeCoin, riferiti alla medesima crypto-valuta la cui frase di presentazione sulla loro pagina web è "Dogecoin è una criptovaluta open source e peer-to-peer, amata dagli Shiba Inu di tutto il mondo.". Un ulteriore curiosità è che il logo raffigurante la razza di cane simbolo di questa valuta è tratto da dei meme popolari sul web. 
-
-Questa crypto-moneta ha avuto molto successe dal momento in cui una grossa comunità ha iniziato a parlarne su diversi social, come tik-tok e Reddit. 
-
+I primi dati che andremo ad analizzare sono quelli relativi al subreddit di DogeCoin, riferiti alla medesima cryptovaluta la cui frase di presentazione è: "Dogecoin è una criptovaluta open source e peer-to-peer, amata dagli Shiba Inu di tutto il mondo.". Un ulteriore curiosità è che il logo raffigurante la razza di cane simbolo di questa valuta è tratto da dei meme popolari sul web. Questa cryptomoneta ha avuto molto successe dal momento in cui una grossa comunità ha iniziato a parlarne su diversi social, come tik-tok e Reddit. 
 
 ### Overview of Doge Raw Dataset 
 
@@ -1099,7 +1091,8 @@ head(freq, 10)
 
 Guardando la frequenza delle parole nel testo, si può notare come ci sia una relazione proporzionale inversa tra la frequenza della parola e il suo rank nella tabella di contigenza, seguendo la ZipF Law [@zipfLaw]. 
 
-$$ p_r = \alpha * 1/r $$
+$ p_r = \alpha * 1/r $
+
 dove r è il rank assegnato ad ogni parola del testo. Per molti testi $\alpha$ è circa pari 1, come mostrato dalla ZipF's Law. 
 Andando a visualizzare il rango e la frequenza in scala logaritmica, la curva dovrebbe avere quindi coefficente angolare pari a 1. 
 
@@ -1127,11 +1120,9 @@ remove(freq)
 remove(tfidf)
 ```
 
-##### And, with stemming? 
+##### And with stemming? 
 
-Proviamo ad eseguire le medesime operazioni utilizzando però lo stemming, per raggruppare parole con la stessa radice. 
-
-Eseguiamo quindi la pulizia dei tokens utilizzando l'argomento _mode = 'stem'_ per eseguire lo stemming su di essi. 
+Proviamo ad eseguire le medesime operazioni utilizzando però lo stemming, per raggruppare parole con la stessa radice. Eseguiamo quindi la pulizia dei tokens utilizzando l'argomento _mode = 'stem'_ per eseguire lo stemming su di essi. 
 
 ```{r}
 
@@ -1173,7 +1164,7 @@ head(freq, 10)
 ```
 
 
-Tra le parole con i primi rank non compaiono solo stopwords, potrebbe essere a causa dei messaggi corti o relazionato agli errori di battitura. Calcoliamo però la sommatoria dei conteggi per salvarla e vedere successivamente delle percentuali. 
+Tra le parole con i primi rank non compaiono solo stopwords, potrebbe essere a causa dei messaggi corti o relazionato agli errori di battitura. 
 
 
 ```{r clean-env-textstat, include = FALSE}
@@ -1213,14 +1204,14 @@ remove(data)
 ```
 
 ```{r bigrams-stat}
-# !! PROBLEM FOR MEMORY 
+
 com_doge <- corpus.tokenize_dfmTidy(comm_corpus, ngrams = 2, dfm_b = FALSE)
 remove(comm_corpus)
 
 post_doge <- corpus.tokenize_dfmTidy(post_corpus, ngrams = 2, dfm_b = FALSE)
 
-com_tidy <- com_doge$tidy
-post_tidy <- post_doge$tidy 
+com_tidy <- com_doge
+post_tidy <- post_doge
 
 remove(com_doge)
 remove(post_doge)
@@ -1277,7 +1268,7 @@ remove(post_clean_bigram_dfm)
 
 ##### Analize uncorrect words
 
-Essendo i corpus di testo recuperati da un social media, perciò dalle parole digitate non ci si aspetta la correttezza ortografica. Sono quindi state utilizzate le funzioni della libreria _hunspell_ [@hunspell], che permette di verificare se una parola risulta corretta o meno, rispetto il loro dizionario , oppure di individuare una lista di suggerimenti per la correzione.
+Essendo i corpus di testo recuperati da un social media, perciò dalle parole digitate non ci si aspetta la correttezza ortografica. Sono quindi state utilizzate le funzioni della libreria _hunspell_ [@hunspell], che permettono di verificare se una parola risulta corretta o meno, rispetto al loro dizionario  e di individuare una lista di suggerimenti per la correzione.
 
 ```{r}
 
@@ -1372,7 +1363,7 @@ La precedente funzione potrà esser utilizzata anche per analizzare gli altri da
 
 ```{r perform-check-spelling}
 # spell checking add counts and freq.
-df <- words.spell_checking(correct_post)
+df <- words.spell_checking(correct_post, words)
 correct_post <- df$correct
 uncorrect_post <- df$uncorrect
 
@@ -1517,12 +1508,12 @@ dim <- dim(dic_suggest)[1]
 ```
 
 La correzione è stata effettuata con i seguenti passi: 
-- assegnare a una variabile colonna _flag_ un valore binario per indicare se la parola è presente tra le stopwords o meno.
-- Se la parola è una stopwords viene utilizzato il suggerimento ritornato da _hunspell_, altrimenti viene impostata come correzione lo stemming della parola.
+* assegnare a una variabile colonna _flag_ un valore binario per indicare se la parola è presente tra le stopwords o meno.
+* Se la parola è una stopwords viene utilizzato il suggerimento ritornato da _hunspell_, altrimenti viene impostata come correzione lo stemming della parola.
 
 Dopo aver corretto le stopwords, si procede come segue: 
-- Se la distanza tra la stringa di partenza e il suo stemming è pari a 0, allora la parola non viene corretta non essendoci una radice riconoscible come stemming. 
-- Se la distanza sopra è maggiore di zero e la distanza tra la parola iniziale e il suggerimento di correzione è pari a zero, viene utilizzata come correzione il suggerimento dato da _hunspell_
+* Se la distanza tra la stringa di partenza e il suo stemming è pari a 0, allora la parola non viene corretta non essendoci una radice riconoscible come stemming. 
+* Se la distanza sopra è maggiore di zero e la distanza tra la parola iniziale e il suggerimento di correzione è pari a zero, viene utilizzata come correzione il suggerimento dato da _hunspell_
 
 
 ```{r large-dictionary}
@@ -1648,7 +1639,7 @@ remove(dic_suggest)
 
 ### Remake Corpus 
 
-Durante la correzione del testo abbiamo recuperato alcune parole digitate male e nel caso non ci fosse una correzione abbiamo applicato lo stemming 
+Durante la correzione del testo abbiamo recuperato alcune parole digitate male e nel caso non ci fosse una correzione abbiamo applicato lo stemming. Si va quindi a sostituire i token del dataset di partenza. 
 
 
 ```{r}
@@ -1821,7 +1812,7 @@ remove(freq)
 Per completezza andiamo ad analizzare i conteggi anche per i bigrammi creati a partire dai dati con alcune parole corrette. 
 
 ```{r bigrams-stat2, eval=FALSE}
-
+# problem in knit
 if(save){data <- readRDS("../Data/dogecoin.rds")}
 post_corpus <- data$corpus_post 
 remove(data)
@@ -1838,6 +1829,7 @@ remove(post_corpus)
 ```
 
 ```{r bigrams-clean-txtstat2, eval =FALSE}
+# problem in knit
 post_clean_tidy <- post_doge$tidy
 remove(post_doge)
 post_clean_tidy <- corpus.clean_tidy(post_clean_tidy, ngrams = 2)
@@ -1989,10 +1981,10 @@ remove(dff)
 ```
 
 Tra le parole più presenti, oltre a doge, possiamo notare parole come: 
-- buy
-- hold
-- moon
-- invest/keep
+* buy
+* hold
+* moon
+* invest/keep
 
 
 ```{r doge-unigrams-sentiment, crop=TRUE}
@@ -2474,9 +2466,7 @@ p1 <- plot_year_sentiment(over_time_sentiment, "2020", polarity_tan)    # date s
 print(p1$plot)
 ```
 
-Questo primo grafico ci fa vedere in media la polarità del sentimento giornaliero, si ha in generale  TODO 
-
-Si va poi a visualizzare il numero di commenti delle tre diverse polarità per ogni giornata e mese. 
+Questo primo grafico ci fa vedere in media la polarità del sentimento giornaliero. Si va poi a visualizzare il numero di commenti delle tre diverse polarità per ogni giornata e mese. 
 
 ```{r}
 p2 <- plot_year_sentiment(over_time_sentiment_join, "2020", polarity_tan)  
@@ -2486,12 +2476,10 @@ print(p2)
 print(p1$plot + p2$plot)
 remove(p1, p2)
 ```
-Si può notare come nel periodo in cui ci sono stati sia tanti commenti positivi che tanti commenti negativi, il valore medio della polarità risulta il più "neutrale" rispetto gli altri mesi. 
 
-L'aggregarsi di tanto sentimento nel mese di Luglio può corrispondere anche ad una semplice maggior attività degli utenti e quindi un maggior numero di commenti come visto nel primo grafico della sezione. 
+Si può notare come nel periodo in cui ci sono stati sia tanti commenti positivi che tanti commenti negativi, il valore medio della polarità risulta il più "neutrale" rispetto gli altri mesi. L'aggregarsi di tanto sentimento nel mese di Luglio può corrispondere anche ad una semplice maggior attività degli utenti e quindi un maggior numero di commenti come visto nel primo grafico della sezione. 
 
 Andiamo a confrontare il sentimento dei commenti del 2021 con l'andamento del prezzo del Dogecoin. Anche qui il numero di commenti, il sentimento espresso in essi e il valore di dogecoin sul mercato sembrano essere correlati. 
-
 
 ```{r}
 dogeusd <- read.csv("../Data/DOGE-USD.csv")
@@ -2524,7 +2512,6 @@ remove(s, p)
 
 #### An advanced tools for sentiment analysis on social media 
 
-
 Riscontrando molte problematiche dovute ai testi del social media e al limitato vocabolario per la sentiment analysis si è deciso di approfondire le tecniche utilizzate in letteratura. Si è trovato questo articolo del 2020 riguardante un analisi fatta su Twitter riguardo il tema Bitcoin, in cui viene utilizzata una nuova tecnica chiamata VADER [@vaderBit].  
 
 Si è quindi provato ad utilizzarla su un sottoinsieme del dataset, per testarne il funzionamento. Il processamento del testo richiede molto tempo, è stato quindi impossibile effettuare un confronto nella classificazione dei sentimenti. 
@@ -2535,7 +2522,7 @@ VADER ( Valence Aware Dictionary for Sentiment Reasoning) [@vader] è un modello
 
 L'analisi viene fatta mappando ciascuna parola al 'sentiment score' che identifica l'intensità dell'emozione. Il punteggio del sentimento di un intero testo può esser ottenuto sommando l'intensità di ciascuna parola. Oltre a riconoscere bigrammi che contengono negazioni, è anche capace di distinguere le parole scritte in maiuscolo e che quindi dovrebbero avere una maggior intensità nel sentimento. 
 
-```{r}
+```{r vader}
 data <- readRDS("../Data/dogecoin.rds")
 doge_df <- data$df_comm
 remove(data)
@@ -2591,7 +2578,7 @@ data_score <- data %>%
 remove(data)
 ```
 
-Essondo presenti molti utenti con score pari a 1 si è deciso di normalizzare i valori nell'intervallo [0-1], in modo da avere una miglior distribuzione e poter legare la feature _score_ ad una caratteristica del grafico (dimensione o colore del nodo per esempio). 
+Essondo presenti molti utenti con score pari a 1 si è deciso di normalizzare i valori nell'intervallo [0-1], in modo da avere una miglior distribuzione e poter legare la feature _score_ ad una caratteristica del grafico (per esempio dimensione o colore del nodo). 
 
 ```{r}
 ## MEAN SCORE FOR EACH USER 
@@ -2645,9 +2632,9 @@ remove(time_sent_aut_score)
 
 #### Build the Users Network
 
-Per costruire le relazioni tra gli utenti si è utilizzato il dato _link\_id_, che permette di indentificare la gerarchia dei commenti all'interno di ogni submit post ( _parent\_id_ ).
+Per costruire le relazioni tra gli utenti si è utilizzato il dato _link\_id_, che permette di indentificare la gerarchia dei commenti all'interno di ogni post pubblicato.
 
-Definiamo quindi la funzione che ci permette di scegliere gli utenti con il maggior numero di commenti effettuati e con questi andare poi a costruire la relazione _'gli utenti hanno avuto un'interazione'_ facendo un join sulla variabile _link\_id_. L'interazione in questo caso consiste nell'aver commentato uno stesso post o lo stesso commento all'interno di un post. 
+Definiamo quindi la funzione che ci permette di scegliere gli utenti con il maggior numero di commenti effettuati e con questi andare poi a costruire la relazione _'gli utenti hanno avuto un'interazione con'_ facendo un join sulla variabile _link\_id_. L'interazione in questo caso consiste nell'aver commentato uno stesso post o lo stesso commento all'interno di un post. 
 
 ```{r user-top-extract}
 # data must have cols : (created_utc, author, link_id )
@@ -2713,10 +2700,10 @@ Per motivi di grandezza computazionale, si è scelto di prendere in esame gli ut
 
 
 Si può notare come i risultati della funzione definita sopra siano: 
-- la lista di nodi presi
-- un dataframe contente i nodi da legare, il link_id del commento e gli identificativi di ciascun commento.
+* la lista di nodi presi
+* un dataframe contente i nodi da legare, il link_id del commento e gli identificativi di ciascun commento.
 
-Gli identificanivi riguardo uno specifico utente vengono ripetuti in diversi righe, questo per il fatto che in una discussione gli utenti scrivano più di un solo commento e quindi la relazione di interazione tra più utenti avviene anche più volte in uno stesso commento. 
+Gli identificativi riguardo uno specifico utente vengono ripetuti in diversi righe, questo per il fatto che in una discussione gli utenti scrivano più di un solo commento e quindi la relazione di interazione tra più utenti avviene anche più volte in uno stesso commento. 
 
 
 ```{r}
@@ -2954,16 +2941,13 @@ Si può infatti notare come i nodi centrali (con centralità maggiore) interagis
 
 Riguardo il sentimento medio, si ha un solo utente con polarità molto negativa e che interagisce su molti commenti; mentre gli utenti con centralità maggiore tendono ad avere un sentimento medio neutrale, questo può esser dovuto al fatto che andando a far la media dei sentimenti si ha un annullamento tra commenti positivi e negativi dell'utente stesso. 
 
-Rispondendo alle domande poste all'inizio del progetto, si è notato come possa esistere una relazione tra i sentimenti estratti dal subreddit di dogecoin e l'andamento del prezzo sul mercato. Questo può confermare il fatto che più si parla di un certo argomento, sia positivamente che negativamente, più l'attenzione generale sale. 
-Questa conclusione può esser fatta per il caso specifico di dogecoin, in cui anche l'alta frequenza di bigrammi relativi all'incitamento all'acquisto può avere avuto una certa influenza.
+Rispondendo alle domande poste all'inizio del progetto, si è notato come possa esistere una relazione tra i sentimenti estratti dal subreddit di dogecoin e l'andamento del prezzo sul mercato. Questo può confermare il fatto che più si parla di un certo argomento, sia positivamente che negativamente, più l'attenzione generale sale. Questa conclusione può esser fatta per il caso specifico di dogecoin, in cui anche l'alta frequenza di bigrammi relativi all'incitamento all'acquisto può avere avuto una certa influenza.
 
 Per confrontare i bigrammi e sentimenti dei diversi subreddit si deve andare ad osservare i risultati ottenuti nell'altro report. In generale la situazione riscontrata nella comunità di dogecoin non si presenta anche negli altri, infatti sono presenti parole o bigrammi che rimandano ad altri argomenti che la sola compravendita della cryptovaluta in questione oppure questi termini non hanno una grande differenza in termini di frequenza rispetto gli altri termini o bigrammi. Inoltre si è visto come la classificazione in sentimenti, pur cambiando nelle percentuali, rimanga più o meno sempre la stessa. 
 
 Per rispondere all'ultima domanda, cioè quando possono esser considarati affidabili gli utenti, non possiamo dirlo con certezza con il solo sentimento con cui si esprimono. Tuttavia, personalmente, sarei portato a 'fidarmi' maggiormente di una persona con sentimento medio positivo e che non sia neanche tra quelle con centralità maggiore; questo perchè reputo che se un utente ha un gran numero di commenti con un sentimento medio neutrale e senza avere uno score più alto rispetto gli altri, probabilmente le informazioni contenute nei suoi testi non sono molte e molto rilevanti, ma magari più di spam o commenti generali. 
 
-Per concludere, si è toccato con il codice la difficoltà di preparare dei dati grezzi e incorretti per l'analisi del testo e quanto può esser utile un correttore delle parole o una tecnica come VADER per il text mining. Purtroppo non si è riusciti a fare un analisi della rete molto esaustiva a causa sia delle risorse computazionali ridotte (il grafo completo occupa circa 60GB di memoria, impedendone l'allocazione) sia essendo reddit un social media con una gestione diversa degli utenti rispetto agli altri. 
-
-L'obiettivo principale però era quello di partire da dei dati grezzi e raccolti autonomamente per arrivare ad estrapolare informazioni interessanti sia per quanto riguarda il text mining sia per una possibile costruzione della rete sociale. 
+Per concludere, si è toccato con il codice la difficoltà di preparare dei dati grezzi e incorretti per l'analisi del testo e quanto può esser utile un correttore delle parole o una tecnica come VADER per il text mining. Purtroppo non si è riusciti a fare un analisi della rete molto esaustiva a causa sia delle risorse computazionali ridotte (il grafo completo occupa circa 60GB di memoria, impedendone l'allocazione) sia essendo reddit un social media con una gestione diversa degli utenti rispetto agli altri. L'obiettivo principale  era quello di partire da dei dati grezzi e raccolti autonomamente per arrivare ad estrapolare informazioni interessanti sia per quanto riguarda il text mining sia per una possibile costruzione della rete sociale. 
 
 
 ## References
