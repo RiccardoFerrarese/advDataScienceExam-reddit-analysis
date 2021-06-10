@@ -1347,19 +1347,19 @@ remove(post_clean_tidy)
 La seguente funzione, oltre ad aggregare i conteggi delle parole ripetute avendo un id del documento diverso, aggiunge al dataframe una colonna con valori booleani per indicare se la parola risulta corretta o meno. Da notare come molte parole non comuni, come per esempio 'dogecoin', non vengono classificate come corrette. 
 
 ```{r def-spell-checking}
-words.spell_checking <- function(data, word){
+words.check_correct_word <- function(data, words){
    # counts word
    com_counts <- corpus.countPlot_tidy(data, bool_plot_count = FALSE, 
                                                 bool_plot_frequency = FALSE)
    #print(com_counts)
    # check words
    com_correct <- com_counts %>%
-       mutate.(check = hunspell_check({{word}})) 
+       mutate.(check = hunspell_check(words)) 
    
    print(paste0("RAW WORDS: ", dim(com_correct)[1], sep = " "))
    
    # aggregate for words
-   correct_unique <- aggregate(count ~ {{word}}+check, data=com_correct, FUN=sum)
+   correct_unique <- aggregate(count ~ words+check, data=com_correct, FUN=sum)
    
    # extract correct 
    correct <- correct_unique %>%
@@ -1388,7 +1388,7 @@ La precedente funzione potrà esser utilizzata anche per analizzare gli altri da
 
 ```{r perform-check-spelling}
 # spell checking add counts and freq.
-df <- words.spell_checking(correct_post, words)
+df <- words.check_correct_word(correct_post, words)
 correct_post <- df$correct
 uncorrect_post <- df$uncorrect
 
@@ -1809,9 +1809,9 @@ print(typeof(post_clean_tidy))
 
 Analizziamo nuovamente il numero di parole corrette e tra quelle scorrette quali sono quelle con i conteggi maggiori. 
 
-```{r, eval = FALSE}
-# problem in knit, view summary table
-df <- words.spell_checking(post_clean_tidy, post_clean_tidy$words)
+```{r }
+
+df <- words.check_correct_word(post_clean_tidy, words)
 
 df$uncorrect %>%
    arrange(desc(count))
@@ -1819,7 +1819,7 @@ df$uncorrect %>%
 
 Il contaggio delle parole corrette non è aumentato di molto, ma questo può esser causato anche dalle parole che _hunspell_ considera come scorrette. Infatti le parole più influenti considerante come scorrette in realtà possono essere considerate come corrette nel contesto in cui sono prese. 
 
-```{r, eval = FALSE}
+```{r }
 remove(df)
 ```
 
@@ -2170,9 +2170,13 @@ doge_top_terms %>%
 
 Come ci si poteva aspettare, essendo dei post già riferiti ad un solo argomento la classificazione in topic non risulta molto utile all'analisi. Nonostante ciò possiamo identificare delle relazioni tra le parole nei diversi topic. 
 
-Per esempio il topic numero 1 ha come argomento principale il dogecoin stesso, quali sono le parole più associate a lui come _binance_ (il wallet da cui si può comprare o vendere la cryptovaluta), _moon_ per il motto che il prezzo toccherà il cielo o _robinhood_ probabilmente riferito al fatto che dogecoin è una moneta che ha ancora un prezzo molto basso ma che ha permesso l'investimento e guadagno anche di coloro che sognavano i Bitcoin. 
+Per esempio il topic numero 2 ha come argomento principale il dogecoin stesso, e parole legato al mondo delle cryptovalute come _wallet_ , _coins_, _bitcoin_.  
 
-Il topic numero 4 invece sembra riferirsi maggiormente all'ambito finanziario di investimenti. Le altre due classificazioni invece non sembrano avere una tematica comune chiara. 
+Il topic numero 4 invece sembra riferirsi maggiormente all'ambito finanziario di investimenti e le parole associate ad esso come _robinhood_, probabilmente riferito al fatto che dogecoin è una moneta che ha ancora un prezzo molto basso ma che ha permesso l'investimento e guadagno anche di coloro che sognavano i Bitcoin.
+
+Le altre due classificazioni invece non sembrano avere una tematica comune chiara. 
+
+Si potrebbe modificare il parametro $\alpha$ per avere un tuning delle distribuzioni migliore, anche tenendo conto dei documenti corti.
 
 ```{r include = FALSE}
 remove(dfmTrimmed, doge_lda, doge_top_terms, doge_topics)
@@ -3055,8 +3059,8 @@ graph_undir %>%
 
 ## Conclusion 
 
-Non essendo una piattaforma social in cui vengono utilizzate relazioni di amicizia e già divise in comunità per un certo argomento, la studio fatto sulla rete (semplificata) degli utenti con il maggior numero di commenti ci porta ad osservare come gli utenti con una centralità maggiore, in entrambe le misure utilizzate, sono anche quelli che hanno commentato un numero maggiore di post diversi. 
-Si può infatti notare come i nodi centrali (con centralità maggiore) interagiscano con più utenti su diversi commenti, al contrario nelle zone periferiche troviamo quegli utenti che scrivono molti commenti ma in pochi post diversi avendo quindi meno interazione con tanti altri utenti. 
+Non essendo una piattaforma social in cui vengono utilizzate relazioni di amicizia e già divisa in comunità per un certo argomento, la studio fatto sulla rete (semplificata) degli utenti con il maggior numero di commenti ci porta ad osservare come gli utenti con una centralità maggiore, in entrambe le misure utilizzate, sono anche quelli che hanno commentato un numero maggiore di post diversi. 
+Si può infatti notare come i nodi centrali interagiscano con più utenti su diversi commenti, al contrario nelle zone periferiche troviamo quegli utenti che scrivono molti commenti ma in pochi post diversi avendo quindi meno interazione con tanti altri utenti. Bisognerebbe però utilizzare come relazione il singolo commento di ciascun utente in modo da associarli uno score e sentimento preciso, avendo così una miglior rappresentazione della rete sociale. 
 
 Riguardo il sentimento medio, si ha un solo utente con polarità molto negativa e che interagisce su molti commenti; mentre gli utenti con centralità maggiore tendono ad avere un sentimento medio neutrale, questo può esser dovuto al fatto che andando a far la media dei sentimenti si ha un annullamento tra commenti positivi e negativi dell'utente stesso. 
 
@@ -3066,7 +3070,9 @@ Per confrontare i bigrammi e sentimenti dei diversi subreddit si deve andare ad 
 
 Per rispondere all'ultima domanda, cioè quando possono esser considarati affidabili gli utenti, non possiamo dirlo con certezza con il solo sentimento con cui si esprimono. Tuttavia, personalmente, sarei portato a 'fidarmi' maggiormente di una persona con sentimento medio positivo e che non sia neanche tra quelle con centralità maggiore; questo perchè reputo che se un utente ha un gran numero di commenti con un sentimento medio neutrale e senza avere uno score più alto rispetto gli altri, probabilmente le informazioni contenute nei suoi testi non sono molte e molto rilevanti, ma magari più di spam o commenti generali. 
 
-Per concludere, si è toccato con il codice la difficoltà di preparare dei dati grezzi e incorretti per l'analisi del testo e quanto può esser utile un correttore delle parole o una tecnica come VADER per il text mining. Purtroppo non si è riusciti a fare un analisi della rete molto esaustiva a causa sia delle risorse computazionali ridotte (il grafo completo occupa circa 60GB di memoria, impedendone l'allocazione) sia essendo reddit un social media con una gestione diversa degli utenti rispetto agli altri. L'obiettivo principale  era quello di partire da dei dati grezzi e raccolti autonomamente per arrivare ad estrapolare informazioni interessanti sia per quanto riguarda il text mining sia per una possibile costruzione della rete sociale. 
+Per concludere, si è toccato con il codice la difficoltà di preparare dei dati grezzi e incorretti per l'analisi del testo e quanto può esser utile un correttore delle parole o una tecnica come VADER per il text mining. Purtroppo non si è riusciti a fare un analisi della rete molto esaustiva a causa sia delle risorse computazionali ridotte (il grafo completo occupa circa 60GB di memoria, impedendone l'allocazione) sia essendo reddit un social media con una gestione diversa degli utenti rispetto agli altri. Inoltre la difficoltà nel pulire il testo da errori ortografici e da onomatopee ha dei risvolti anche nell'analisi del testo. 
+
+Tuttavia, l'obiettivo principale era quello di partire da dei dati grezzi e raccolti autonomamente per arrivare ad estrapolare informazioni interessanti sia per quanto riguarda il text mining sia per una possibile costruzione della rete sociale. 
 
 
 ## References

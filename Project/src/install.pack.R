@@ -35,8 +35,9 @@ install.packages("textdata")        # lib for sentiment dataset
 
 install.packages("textstem")        # lib for lemmatize words
 
+install.packages("topicmodels")
 
-
+install.packages("vader")
 install.packages("hunspell")
 install.packages("SnowballC")       # lib for stemming words and more..
 
