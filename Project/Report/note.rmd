@@ -1,0 +1,3080 @@
+---
+title: "An approach to Sentiment & Network Analysis on cryptocurrency issues on Reddit"
+author: "Riccardo Ferrarese"
+date: "14/06/2021"
+output:
+  html_document:
+    
+    toc: true
+    toc_depth: 4
+    df_print: paged
+  pdf_document: 
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 4
+bibliography: bibliography.bib
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE, 
+                      python.reticulate=FALSE, 
+                      echo = TRUE, 
+                      warning = FALSE, 
+                      cache = TRUE, 
+                      message = FALSE,
+                      out.width = "60%", 
+                      fig.align="center"
+                      )
+knitr::knit_hooks$set(crop = knitr::hook_pdfcrop) 
+knitr::knit_hooks$set(optipng = knitr::hook_optipng)
+hook_output <- knitr::knit_hooks$get("output")
+
+# bib <- "../bibliography.bib"
+
+print_ <- function(string){ paste0("\n", string, "\n") %>% cat()}
+
+# ulimit -s unlimited
+```
+
+
+
+## Introduction
+
+Questo progetto ha come principale obiettivo l'analisi del testo di grandi dataset creati a partire dai commenti di questo ultimo anno e mezzo di diverse comunità della piattaforma social Reddit.
+
+Il report è strutturato in modo tale da seguire l'ordine di esecuzione del codice, in modo da gestire al meglio gli oggetti nell'ambiente di Rstudio, che altrimenti rischierebbero di saturare la memoria a disposizione della macchina virtuale istanziata da R per memorizzare gli oggetti ([memory limit](https://search.r-project.org/R/refmans/base/html/Memory-limits.html)). Inoltre, alcuni chunck contenenti la rimozione degli oggetti in memoria non sono stati visualizzati sul report finale. 
+
+Seguirà una prima parte dove verranno definite tutte le funzioni utili all'analisi eseguita nella seconda parte del report. Avendo a disposizione diversi dataset, sono state create delle funzioni il più generali possibili per permette l'esecuzione del codice su tutti i dati. 
+
+Per brevità del report, questo documento conterrà l'analisi più approfondita sul dataset principale e le conclusioni riferite anche agli altri dati, ma le analisi di questi ultimi verranno proposte in un report a parte. 
+
+Sono state scelte 4 comunità riguardanti quattro crypto-monete diverse, due di esse sono riguardanti valute con una storia solida alle spalle, le altre due riguardano  valute nate "per scherzo" ma che successivamente hanno riscosso molto successo sul mercato. 
+
+Si è quindi andati ad analizzare i subreddit relativi a DogeCoin, PancakeSwap, Bitcoin e EthTrader. 
+
+### Initial Questions
+
+Prima di iniziare la discussione del lavoro, si elencano le domande principali poste una volta scelto il dominio per l'analisi: 
+
+* Chi sono gli utenti maggiormente attivi?
+
+* Quali sono le parole e i bigrammi più utilizzati? 
+
+* Ci potrebbe essere una relazione tra i sentimenti dei commenti e gli eventi sociali/economici relativi ai temi?
+ 
+* Gli utenti più attivi possono esser considerati affidabili? 
+
+* Tra le diverse comunità c'è una differenza nel modo di esprimersi e negli argomenti trattati? 
+
+
+## Setup App
+
+Il progetto è stato eseguito su una macchina Ubuntu con 16 threads e memoria RAM pari a 16GB. 
+
+Per la gestione del progetto sono state utilizzati i seguenti pacchetti: 
+
+* [*git*](http://try.github.io/), sistema per il controllo del versionamento 
+* [*renv*](https://blog.rstudio.com/2019/11/06/renv-project-environments-for-r/), permette di creare un ambiente di esecuzione isolato per la gestione delle dipendenze. Permette anche di utilizzare il pacchetto _reticulate_ per integrare degli script in Python e gestire l'ambiente locale per la loro esecuzione.
+
+
+Per eseguire il progetto in R, dopo aver clonato il repository da github, è necessario impostare la working directory per installare i pacchetti necessari e utilizzare le funzioni del pacchetto _renv_: 
+
+```{r eval=FALSE}
+setwd("~./<clone-dir>/Project")
+install.packages("renv")                 # packages dependecies write on renv.lock
+
+renv::restore()
+```
+
+Le librerie utilizzate per eseguire l'analisi dei dati estratti dalla piattaforma Reddit sono le seguenti: 
+
+```{r library, result='hide'}
+
+# general lib for manipulate data
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(sets)
+
+# lib for side by side plot 
+library(patchwork)
+
+# lib for network analysis
+library(ggraph)
+library(tidygraph)
+library(lubridate)
+
+# lib for text mining
+library(tidytext)
+library(quanteda)
+library(quanteda.textplots)
+library(stringdist)
+
+# lib for sentiment dataset
+library(textdata)
+
+# lib for lemmatize words
+library(textstem)
+
+# lib for stemming words
+library(hunspell)
+library(SnowballC)
+
+library(tidytable)
+library(microbenchmark)
+library(quanteda.textstats)
+```
+
+Per installare l'ambiente necessario ad eseguire lo script in python e per eseguire l'analisi in R è consigliato installare un ambiente conda. Se eventualmente si vuole salvare i dataframe parziali di certe operazioni, come oggetti RDS, è necessario impostare la seguente variabile a TRUE. Fino alla sezione riguardante la correzione del corpus è possibile non salvare i dati, per l'ultima parte invece risulta necessario a causa della grandezza degli oggetti creati. 
+
+
+```{r}
+save <- TRUE 
+```
+
+Lo spazio di memoria occupato da tutti gli oggetti salvati è pari a circa 3 GB. 
+
+## Reddit 
+
+Si può definire Reddit come un _social-network aggregator_, cioè è una piattaforma di discussione in cui gli utenti possono discutere o condividere informazioni, suddivisa in forums di specifici argomenti chiamati **subreddits**. 
+
+Reddit, a differenza della maggior parte dei social-network maggiormente utilizzati, non presenta un meccanismo per scegliere una cerchia di utenti con cui interagire (per intenderci,  i followers su Twitter o Instagram), tuttavia il modo in cui è organizzato permette all'utente di interagire in diversi forums, ognuno di uno specifico argomento, nel quale interagirà con gli altri utenti che 'seguo' lo stesso _subreddit_. Inoltre sulla pagina generale si possono trovare i post più popolari di tutta la piattaforma. 
+
+Ogni utente può eseguire un numero illimitato di interazioni con la piattaforma, dove le interazioni possono essere la scrittura di un post in uno specifico subreddit, commentare post e interazioni di altri utenti o esprimere la propria preferenza relativa a un certo post o commento. Se un certo post (a meno che non sia di un subreddit privato)  riceve molti _downvotes_ immediatamente crollerà sulla 'classifica dei post' e scoparirà dalla vista degli altri utenti. Al contrario se acquisisce una certa importanza potrà esser visualizzato nella pagina generale di reddit e raggiungendo così un numero maggiore di utenti. 
+
+Un ulteriore particolarità di questa piattaforma è che gli utenti sono allo stesso modo creatore di contenuti, consumatori e curatori delle informazioni in esso. Utilizza infatti un sistema a punteggio, tramite _upvotes_ e _downvotes_ da parte degli utenti, per determinare i contenuti e le discussioni con maggior interesse e che verrano mostrati nei primi contenuti della pagina. 
+
+Pur permettendo agli utenti di mantenere l'anonimicità utilizzando un nome utente a piacere, Reddit tiene traccia di tutte le attività di ogni profilo inclusi i post e i commenti effettuati. 
+
+
+## Collect Data with Python
+
+Per la raccolta dati è stato utilizzato Python dal momento che è presente la libreria _Pushshift_ per l'estrazione dei dati di Reddit senza vincoli stringenti sulle richieste effettuate e essendo che la libreria per R ha dato problemi scaricando dati non completi. E' stato utilizzato un wrapper delle Python Reddit API, **pmaw**, che permette di eseguire lo scrapping dei dati utilizzando il multithreading, in modo tale da rendere più efficente il processo di raccolta dei dati.
+
+Le API mettono a disposizione una serie di funzioni per la ricerca dei post d'interesse, potendo specificare l'intervallo temporale e i subreddit in cui eseguire la ricerca. Inoltre, volendo estrarre informazioni relative a diversi subreddit è stata utilizzata la libreria _multiprocessing_ per lanciare un _pool_ di processi incaricati di eseguire la ricerca su dati diversi. 
+
+```{python main, eval=FALSE}
+
+LIST_of_SUBREDDIT = [ 'dogecoin',  
+    'pancakeswap', 
+    'eth',
+    'ethereum', 
+    'Bitcoin',
+    'elon']
+
+    start_epoch=int(dt.datetime(2020, 1, 1).timestamp())
+    end_epoch=int(dt.datetime(2021, 2, 1).timestamp())
+
+    nargs = []
+    for x in LIST_of_SUBREDDIT:
+        nargs.append( [start_epoch, end_epoch, 'submissions', x] )
+        nargs.append( [start_epoch, end_epoch, 'comments', x]  )
+
+    pool = Pool(16)
+    pool.map(run, nargs)
+    pool.close()
+    pool.join()
+
+```
+
+La funzione _run_ lanciata da _pool.map_ istanzia un oggetto di classe Miner contente la chiave di autenticazione per accedere a Pushshift e i metadati delle informazioni da raccogliere. In questo modo vengono lanciati diversi **Miner**, ognuno per uno specifico subreddit, i quali eseguono la ricerca e il salvataggio dei dati in parallelo. 
+
+```{python func-class, eval=FALSE}
+def run(args) -> pd.DataFrame: 
+    """
+    Function for starts miner's' process
+
+    Args: 
+        [start, end]: [temporal intervall where we would scrap data]
+        [item]: element to scrap
+    Returns:
+        [type]: [description]
+    """
+
+    print(args)
+    start, end, item, subreddit = args
+
+    miner = Miner(start, end, item, subreddit)
+    miner.perform_search()
+    return miner.read_data()
+
+class Miner(object):
+    """ Class for Reddit Data Mining"""
+    
+    def __init__(self, start_epoch, end_epoch, func, subreddit) -> None:
+        super().__init__()
+        self.api = PushshiftAPI(rate_limit=100) 
+        self.start_time = start_epoch
+        self.end_time= end_epoch
+        self.subreddit = subreddit
+        self.data = None 
+        self.func = func
+
+    def read_data(self): 
+        return self.data
+
+    def perform_search(self):
+        item = self.func 
+        print(f'Start search {item}...')
+        if item == 'submissions': 
+            df = self.search_save_sub(self.subreddit)
+            self.data = df
+        if item == 'comments':
+            df = self.search_save_com(self.subreddit)
+            self.data = df
+    
+    @timeit
+    def search_save_sub(self, subreddit): 
+        api = self.api
+        res_ = api.search_submissions(after=self.start_time,
+                                before=self.end_time, 
+                                subreddit=subreddit,
+                                filter=COLS_SUB, 
+                                #limit=2
+                                )
+        data = pd.DataFrame([x for x in res_])
+        data.to_csv(f"./data/{self.subreddit}_sub.csv")
+        print(f"write {self.subreddit}_sub.csv")
+        
+    @timeit
+    def search_save_com(self, subreddit):
+        api = self.api
+        res_ = api = self.api.search_comments(after=self.start_time,
+                                before=self.end_time, 
+                                subreddit=subreddit,
+                                filter=COLS_COM, 
+                                #limit=2
+                            )
+        data = pd.DataFrame([x for x in res_])
+        data.to_csv(f"./data/{self.subreddit}_com.csv")
+        print(f"write {self.subreddit}_com.csv")
+```
+
+E' stato utilizzato un _rate-limit_ per impostare un numero di richieste all'API pari a 100 al minuto, leggermente superiore al limite di default (1 richesta per secondo) ma leggermente inferiore al limite imposto dalle richieste al minuto massime che si possono effettuare senza subire ritardi nella risposta. 
+
+La funzione _decorator timeit_ permette inoltre di avere una misura indicativa del tempo impiegato per ogni richiesta.
+Di seguito è mostrato un estratto di output da terminale che si ottiene dopo l'esecuzione del programma. 
+
+```{shell eval=FALSE}
+args first process: [1577833200, 1614553200, 'submissions']
+args second process: [1577833200, 1614553200, 'comments']
+Start search comments...
+Start search submissions...
+1430174 results available in Pushshift
+259899 results available in Pushshift
+Checkpoint:: Success Rate: 36.00% - Requests: 100 - Batches: 10 - Items Remaining: 256299
+Checkpoint:: Success Rate: 29.00% - Requests: 100 - Batches: 10 - Items Remaining: 1427274
+Checkpoint:: Success Rate: 35.50% - Requests: 200 - Batches: 20 - Items Remaining: 253225
+Checkpoint:: Success Rate: 27.50% - Requests: 200 - Batches: 20 - Items Remaining: 1424674
+Items Remaining: 1417879
+
+[...]
+
+write ./doge_sub.csv
+time: 194798997.85995483 ~~ 3.25 h 
+```
+
+
+
+## Text Analysis 
+
+Per affrontare l'analisi del testo è neccessario avere un ogetto detto _corpus_ con cui vengono rappresentati tutti i documenti (commenti o post nel nostro caso di studio) dei dati raccolti. Un altro oggetto che può esser molto utile nell'analisi è la _document features matrix_  dove ogni colonna rappresenta un termine o token estratto e come righe i conteggi di frequenza di essi relativi ad ogni documento. 
+
+Prima di definire le funzioni utili all'analisi si visualizza il procedimento di preparazione dei dati.
+
+![](./advds1.png)
+
+Gli oggetti dalla prima funzione verranno poi passati alle funzioni per la pulitura e aggregazione dei dati.
+
+![](./advds2.png)
+
+
+
+### Quanteda Library 
+
+**Quanteda** [@quanteda] è pacchetto per R per manipolare e analizzare dati testuali in formato non-tidy, sviluppata da Kenneth Benoi, Kohei Watanabe e altri contributors. Definisce una serie di funzioni per applicare processi di NLP (Natural Language Processing) a partire da testi di qualsiasi tipo o documenti, fino all'analisi finale. 
+
+Una funzionalità molto utile di questo pacchetto è l'esecuzione in multi-threading delle sue funzioni. Si possono definire il numero di threads da utilizzare all'interno della funzione _quanteda_options_, altrimenti vengono impostati al valore di default che corrisponde a: 
+
+```{r}
+RcppParallel::defaultNumThreads()
+```
+
+In questo progetto, la libreria è stata utilizzata per creare i _corpus_ a partire dai dati estratti da reddit contenenti il testo dei commenti. Per comodità di utilizzo del pacchetto, sono state utilizzate le funzioni per la creazione dei _tokens_ a partire dai commenti non manipolati, utilizzando le funzioni built-in per la rimozione di punteggiatura, simboli e le stop-words generali. 
+
+Successivamente alla manipolazione e pulizia dei commenti è stata utilizzata la funzione _dfm_ per creare la _document-feature matrix_, in modo tale da rendere compatibile il tipo del dato con il pacchetto _tidytext_ per la continuare l'analisi. 
+
+Viene messo a disposizione anche un pacchetto per effettuare un'analisi statistica del document-feature matrix: 
+
+```{r dfm-txt-stat-def}
+
+dfm.frequency <- function(.dfm, n = 50, plot = TRUE){
+   
+   # n :: top n features to be returned 
+   features_dfm <- textstat_frequency(.dfm, n)
+   
+   head(features_dfm, 10)
+   
+   # Sort by reverse frequency order
+   features_dfm$feature <- with(features_dfm, reorder(feature, -frequency))
+   features_dfm$rank <- as.numeric(features_dfm$rank)
+   if(plot){
+      plot <- features_dfm %>%
+         ggplot(aes(x = rank, y = frequency)) +
+         geom_point(size=0.1) + 
+         scale_y_log10() + 
+         scale_x_log10() + 
+         theme_classic() +
+         theme(axis.text.x = element_blank(), 
+               axis.title.x = element_text("log( rank )"), 
+               axis.title.y = element_text("log( frequency )"))
+      
+      features_dfm$feature <- with(features_dfm, reorder(feature, -rank))
+      #theme(axis.text.x = element_text(angle = 90, hjust = 1))
+      
+      mod = lm(log10(features_dfm$frequency) 
+               ~ log10(features_dfm$rank), data = features_dfm)
+      #print(mod$coefficients[1])
+      plot2 <- features_dfm %>%
+         ggplot(aes(x = rank, y = frequency)) +
+         geom_abline(intercept = mod$coefficients[1], 
+                     slope = mod$coefficients[2], 
+                     color = 'red', 
+                     linetype = 3
+                     ) +
+         geom_line(size=0.5) + 
+         scale_y_log10() + 
+         scale_x_log10() + 
+         theme_classic() +
+         theme(axis.text.x = element_blank(), 
+               axis.title.x = element_text("log( rank )"), 
+               axis.title.y = element_text("log( frequency )"))
+      
+      print(plot + plot2)
+   }
+   return(features_dfm)
+}
+```
+
+
+Una funzione motlo utile messa a disposizione dal pacchetto è quella per calcolare il valore di tfidf per la matrice dei documenti. Tuttavia, in questo caso di studio, risulta poco utile nel contesto di un singolo subreddit dal momento che si considera come documento ogni singolo commento.
+
+Potrebbe però esser utile per comparare l'insieme totale di commenti di un subreddit con il contenuto presente negli altri. 
+
+Verrà utilizzata anche la funzione _textplot\_wordcloud_ per rendere più piacevole e veloce il riconoscimento delle parole più frequenti.
+
+### Function for Text Mining
+
+In questa sezione si mostrano le funzione definite per manipolare, pulire e visualizzare i dati estratti da reddit. 
+
+Si è scelto di definire delle funzioni il più generali possibili, in modo tale da rendere più efficiente l'analisi di diversi dataset, che condividono le stesse variabili esplicative ma riferiti a subreddit diversi. 
+
+La prima funzione definita, _df.create_, verrà utilizzata per creare il dataset di partenza a partire dai dati grezzi salvati in formato csv dallo script in Python. L'algoritmo esegue i seguenti passaggi: 
+
+* converte in un formato comodo per R la colonna rappresentate le date di creazione dei commenti.
+
+* aggiunge un id per ogni riga. 
+
+* rimuove i commenti cancellati o quelli che sono stati sottoposti ad una moderazione. 
+
+* aggregare i testi dei commenti come post. 
+
+* crea il corpus utilizzando la funzione messa a disposizione dal pacchetto _quanteda_.
+
+* salva i dataset in un oggetto R ( _.rds_ ) per un utilizzo futuro
+
+
+```{r text_mining}
+## data must have cols : (created_utc, author, body )
+# data is pushshift's returned csv
+df.create <- function(data, dir, subR, filter_post=2){
+   
+   # compute type date
+   # add unique id for each comment 
+   # filter removed comment
+   data_clean <- data %>%
+      mutate(date = as.Date(as_datetime(created_utc))) %>%
+      filter(author != '[deleted]' & author != 'AutoModerator') %>% 
+      mutate(id = row_number()) %>%
+      distinct( author, date, body, parent_id, link_id, .keep_all= TRUE) %>%
+      select(id, date, author, body, parent_id, link_id) 
+   
+   ## remove source data for save space
+   remove(data)
+   
+   # DF for Corpus by POST 
+   df_post <- data_clean %>% 
+      select(link_id, body) %>%
+      # aggregate comment whith same postID
+      aggregate(by=list(data_clean$link_id), paste) %>% 
+      # compute num of element in body list for each postID
+      mutate( n_com = unlist(map(link_id, length))) %>%
+      rename("postID" = "Group.1") %>% 
+      select(postID, body, n_com) %>% 
+      # group by post ID and merge senteces in body
+      group_by(postID) %>%
+      mutate( body = paste( do.call( c , body), collapse = "\n ") ) %>%
+      ungroup() %>%
+      # filtra post con meno di 5 commenti 
+      filter(n_com > filter_post)
+     
+   
+   
+   post_corpus <- corpus(df_post$body, 
+            docnames = df_post$postID, 
+            docvars = data.frame(n = df_post$n_com))
+ 
+   # quanteda corpus function 
+   corpus <- corpus( as.character(data_clean$body), 
+                     docnames = data_clean$id, 
+                     docvars = data.frame(author = data_clean$author, 
+                                          data = data_clean$date, 
+                                          link_id = data_clean$link_id))
+   
+   #print(summary(data_clean[ c("id", "date", "author")] ))
+   
+   rtn <- list("df_comm" = data_clean, 
+            "df_post" = df_post, 
+            "corpus_comm" = corpus, 
+            "corpus_post" = post_corpus ) 
+      
+   saveRDS(rtn, paste0(dir, subR, ".rds", sep = ""))
+   
+   return(rtn)
+}
+```
+
+
+#### Function for prepare data 
+
+Le seguite tre funzioni sono state utilizzate per rendere più leggibile il codice. La funzione  per la normalizzazione verrà utilizzata nell'ambito della sentiment analysis, la funzione che applica una serie di regex per la pulizia del testo e la funzione per la manipolazione dei token sarà utile per lemmatizzare o eseguire lo stemming di ogni parola. 
+
+
+```{r corpus-tidy-count-function, result='hide'}
+
+## function for normalize value between (0-1]
+# x = data.frame(n = c(1,2,3,4,5,6,7))
+# x %>% mutate(minmax = range01(n))
+range01 <- function(x){
+               min <- min({{x}})
+               max <- max({{x}})
+               (x-min+1)/(max-min+1)
+}
+
+## func for clean a little bit the words
+# data for dyplr pipe -- 
+#          curly-curly impl.  := to assign, 
+#                             {{}} to ref a cols in data, 
+#                             !!! access to the value
+# data:: tidy text object 
+# word:: ref to cols in data 
+word.apply_regexs <- function(data, word){
+   
+   ## use curly-curly for word cols
+   data %>% 
+      mutate( {{word}} := str_extract({{word}},  "[a-z]+")) %>%
+      # rimuove spazi ecc
+      mutate( {{word}} := gsub("[[:punct:]]", "", {{word}})) %>%
+      # word with all same char
+      mutate( {{word}} := gsub("^([:alpha:])\1+", "", {{word}})) %>%
+      mutate( {{word}} := gsub("^(a){5}[a-z]*", "", {{word}})) %>%
+      # word with 1 or 2 char
+      mutate( {{word}} := gsub("^[a-z]{1,2}\\b", "", {{word}})) %>%
+      
+      # word with numeber
+      # mutate( word = gsub("^(\\d)+", "", word)) %>%
+      
+      # laughing word 
+      mutate( {{word}} := gsub("\\b(?:a*(?:ha)+h?|h*ha+h[ha]*|(?:l+o+)+l+|o?l+o+l+[ol]*)\\b", "", {{word}}) ) %>%
+      filter( {{word}} != "" ) 
+
+}
+
+## function for lemmatization, stemming or POS for words, bi-grams and tri-grams
+# data:: tidy text object 
+# mode:: {"lemma", "stem", "other"} default is "none" 
+# words{1,2,3}:: ref to cols in data 
+word.manipulation <- function(data, word1, word2, word3, mode = 0, ngrams = 1){
+
+         
+   if(mode == 1){
+      if(ngrams == 2){
+         data %>%
+            mutate({{word1}} := textstem::lemmatize_words({{word1}})) %>%
+            mutate({{word2}} := textstem::lemmatize_words({{word2}}))
+      } else if(ngrams == 3){
+         data %>%
+            mutate({{word1}} := textstem::lemmatize_words({{word1}})) %>%
+            mutate({{word2}} := textstem::lemmatize_words({{word2}})) %>%
+            mutate({{word3}} := textstem::lemmatize_words({{word3}})) 
+         
+      }else {
+         data %>%
+            mutate( {{word1}} := textstem::lemmatize_words({{word1}})) 
+         
+      }
+   } else if(mode == 2){
+      if(ngrams == 2){
+         data %>%
+            mutate({{word1}} := SnowballC::wordStem({{word1}}, language = "english")) %>%
+            mutate({{word2}} := SnowballC::wordStem({{word2}}, language = "english"))
+      } else if(ngrams == 3){
+         data %>%
+            mutate({{word1}} := SnowballC::wordStem({{word1}}, language = "english")) %>%
+            mutate({{word2}} := SnowballC::wordStem({{word2}}, language = "english")) %>%
+            mutate({{word3}} := SnowballC::wordStem({{word3}}, language = "english"))
+      } else {
+         data %>%
+            mutate({{word1}} := SnowballC::wordStem({{word1}}, language = "english"))
+         
+      }
+      
+   } else {
+      data
+   }
+
+}
+
+```
+
+
+La funzione che calcola i token permette di scegliere, tramite argomento, se calcolare i token rispetto la singola parola oppure se calcolarli come bigrammi o trigrammi, in modo tale da poter eseguire un'analisi tenendo conto delle relazioni tra le diverse parole adiacenti in uno stesso commento. 
+
+Successivamente le parole vengono filtrate in modo tale da rimuove caratteri speciali che si trovano agli estremi di esse, infatti reddit permette di inserire dei caratteri per enfatizzare le parole, similmente all' _underscore_ e altri  nel formato Markdown. Inoltre vengono rimosse le parole formate da uno e due caratteri, in modo tale da ridurre il numero di onomatopee che vengono utilizzate nel linguaggio dei messaggi. Questa scrematura non è risultata sufficiente per costruire un dataset con solo parole con un significato compiuto, ma dal momento che 'parole' prive di significato avranno poche ripetizioni all'interno di tutto il corpus di testo, potranno esser rimosse successivamente dai grafici con un filtro sul conteggio. Inoltre per l'analisi del sentimento un gran numero di parole non troveranno un accoppiamento nei dataset messi a disposizioni, tra queste anche quelle prive di significato. 
+
+Dopo una prima pulitura delle parole è possibile, tramite argomento della funzione, specificare se si vuole o meno eseguire lo _stemming_ oppure la _lemmatization_. Si è scelto di usare tecniche diverse in base al task: 
+
+* per l'analisi del sentimento la correzione ed eventuale lemmatization
+
+* per il conteggio delle parole lo stemming 
+
+
+La funzione corpus.tokenize_dfmTidy permette di tokenizzare il corpo del testo rimuovendo le stopwords, eseguire diversi tipi di correzione dei token, siamo per termini che per bigrammi e trigrammi. 
+
+Infine, l'utlima funzione qua definita permette di eseguire il conteggio di ogni token dato un dataframe in formato _tidy_ ed è anche possibile, tramite argomento, specificare se si vuole disegnare il grafico relativo alle frequenze. 
+
+
+
+```{r, result='hide'}
+## tokenize corpus and make document-feature matrix (DFM + TIDY)
+# data :: text corpus 
+# stop :: bool for remove stop word
+# ngrams :: {1,2,3} for compute corpus on ngrams
+corpus.tokenize_dfmTidy <- function(data, remove_stop=TRUE, spell_checking = FALSE, mode_correction = 0, ngrams=1, dfm_b=TRUE){
+   
+   # if stopword .. 
+      # build toks  
+   if(remove_stop){
+      toks <- quanteda::tokens_select(
+                  quanteda::tokens(data,
+                         remove_punct = TRUE, 
+                         remove_symbols = TRUE, 
+                         remove_numbers = TRUE, 
+                         remove_url = TRUE),
+               pattern = stopwords("en"), selection = "remove")
+   } else {
+      toks <- quanteda::tokens(data,
+                         remove_punct = TRUE, 
+                         remove_symbols = TRUE, 
+                         remove_numbers = TRUE, 
+                         remove_url = TRUE)
+   }
+   
+   if( spell_checking ){
+      
+      # correct words with my dictionary 
+      if( mode_correction == 0){
+         dict <- readRDS("../Data/dictionary.rds")
+         
+         dict <- dict %>% drop_na()
+         dic_words <- dict$term
+         correct <- dict$correction
+         
+         toks <- tokens_replace(toks, dic_words, correct, case_insensitive = TRUE)
+         
+      } else if( mode_correction == 1){
+         # correct all words with first hunspell's suggestion
+      } else if( mode_correction == 2){
+         # vader 
+         
+      }
+   }
+   
+   # if ngrams -- compute toks for bigrams or trigrams 
+   if(ngrams==2){
+      dfm <- quanteda::dfm(quanteda::tokens_ngrams(toks, n = 2, 
+                                                   concatenator = " "))
+   } else if(ngrams==3){
+      dfm <- quanteda::dfm(quanteda::tokens_ngrams(toks, n = 3, 
+                                                   concatenator = " "))
+   } else {
+      dfm <- quanteda::dfm(toks)
+   }
+   
+   # return dfm and tidy 
+   
+   rtn <- tidytext::tidy(dfm)
+   if(dfm_b){
+      rtn <- list(tidy = tidytext::tidy(dfm), dfm=dfm)
+   }
+   return(rtn)
+}
+
+## function for clean data and separate ngrams 
+# tidy :: dataframe compute by create corpus ( tidy dfm )
+# ngrams :: {1,2,3} for compute corpus on ngrams
+corpus.clean_tidy <- function(tidy, ngrams=1, mode = "none"){
+
+   if(mode == "lemma"){ .mode <- 1 }
+   else if(mode == "stem" ){ .mode <- 2 }
+   else{ .mode <- 0 }
+   
+   #### check ngrams and build clean dataframe
+   if(ngrams == 2){
+      clean_df <- tidy %>%
+         ## mutate term in word
+            unnest_tokens(words, term, token = "ngrams", n=2) %>% 
+         ## divide bigrams in words
+            tidyr::separate(words, c("word1", "word2"), sep = " ", 
+                            remove = FALSE) %>%       
+            filter( word1 != word2 & word2 != word1 ) %>%
+         # apply some regex
+            word.apply_regexs(word1)  %>%                   
+            word.apply_regexs(word2) %>%
+         # apply stemming or lemmatiz ..
+            word.manipulation(word1, word2, mode = .mode , ngrams = ngrams)
+      
+   } else if (ngrams == 3){
+      clean_df <- tidy %>%
+            unnest_tokens(words, term, token = "ngrams", n=3) %>%                     
+            tidyr::separate(words, c("word1", "word2", "word3"), sep = " ",
+                            remove = FALSE) %>%   
+            filter( word1 != word2 & word2 != word3 & word1 != word3 ) %>%
+            word.apply_regexs(word1) %>%                   
+            word.apply_regexs(word2) %>%
+            word.apply_regexs(word3) %>%
+            word.manipulation(word1, word2, word3, 
+                              mode = .mode , 
+                              ngrams = ngrams)
+      
+      
+   } else {
+      clean_df <- tidy %>%
+            unnest_tokens(words, term)  %>%                      
+            word.apply_regexs(words)   %>%
+            word.manipulation(words, mode = .mode, ngrams = ngrams)
+   }
+   
+   return(clean_df)
+}
+
+## function for word (or ngrams) counts and plot 
+# data :: clean df TIDY DFM 
+
+# ngrams :: {1,2,3} for compute corpus on ngrams
+# threshold_count :: value to filter items by count for pritty plot
+# threshold_freq :: value to filter items by frequency for pritty plot
+# bool_plot_count :: boolean to indicate whether to plot word counts or not 
+# bool_plot_freq :: boolean to indicate whether to plot word frequencies or not
+corpus.countPlot_tidy <- function(data, 
+                                  threshold_count=1000, 
+                                  threshold_freq=0.001, 
+                                  ngrams=1, plot = TRUE, 
+                              bool_plot_count=TRUE, bool_plot_frequency=TRUE){
+
+   if(ngrams == 2){
+      # merge single word
+      words_unite <- data %>%
+         unite(words, c("word1", "word2"), sep = " ") 
+      # sum count col for each word
+      word_counts <- aggregate(cbind(count) ~ words, data=words_unite, FUN=sum) 
+      
+   } else if(ngrams == 3){
+      words_unite <- data %>%
+         unite(words, c("word1", "word2", "word3"), sep = " ") 
+      word_counts <- aggregate(cbind(count) ~ words, data=words_unite, FUN=sum) 
+      
+   } else {
+      word_counts <- aggregate(cbind(count) ~ words, data=data, FUN=sum)
+   }
+   
+   total_of_word <- sum( word_counts$count )
+   word_counts <- word_counts %>%
+      mutate( count = as.integer(count)) %>%
+      mutate( total_of_word = total_of_word ) %>%
+      mutate( frequency = count/total_of_word)
+   
+   if(plot){
+      # plot for count col
+      plot_freq <- word_counts %>%
+         filter( frequency > threshold_freq) %>%
+         ggplot(aes(words, frequency)) + 
+            geom_point(alpha = 0.3, size = 1.5) + 
+            geom_text(aes(label = words), check_overlap = TRUE, vjust = 1) + 
+            theme_classic() + 
+            theme(axis.text.x=element_blank()) 
+      
+      # plot for frequency col
+      plot_count <- word_counts %>%
+         filter( count > threshold_count) %>%   
+         ggplot(aes(words, count)) + 
+            geom_point(alpha = 0.3, size = 1.5) + 
+            geom_text(aes(label = words), check_overlap = TRUE, vjust = 1) + 
+            scale_y_log10() + 
+            theme_classic() + 
+            theme(axis.text.x=element_blank()) 
+      
+         # print selected plot 
+      if(bool_plot_count & bool_plot_frequency){
+         print(plot_freq + plot_count + plot_layout(ncol=1, heights = c(4,4)) )
+      } else if(bool_plot_count){
+         print(plot_count)
+      } else if(bool_plot_frequency){
+         print(plot_freq)
+      }
+      
+   }
+
+  
+    # split words for sentiment analysis 
+   if(ngrams == 3 ){
+      word_counts <- word_counts %>%
+         tidyr::separate(words, c("word1", "word2", "word3"), sep = " " )
+   } else if(ngrams == 2){
+      word_counts <- word_counts %>%
+         tidyr::separate(words, c("word1", "word2"), sep = " " )
+   }
+   
+   return(word_counts)
+   
+}
+```
+
+
+#### Function for the sentiments
+
+
+Le funzioni definite per l'analisi del sentimento del testo permette di classificare ciascuna parola (o n-gramma) secondo i sentimenti presenti nei dataset messi a disposizione da _textdata_.
+
+Per un analisi generale dei sentimenti di ciascun subreddit si è scelto di utilizzare i sentimenti elencati nel dataset _"nrc"_. Per classificare ciascuna parola sono stati utilizzati entrambe le categorizzazioni messe a disposizione da _"afinn"_, che permette di avere un punteggio numerico per identificare la positività o meno del sentimento, e da _"bing"_, che più semplicemente da solo una categorizzazione tra parole positive e negative. 
+
+La funzione words.classSentiment permette di classificare termini, bigrammi e trigrammi a seconda del sentimento corrispondente nel dataset "nrc". Calcola i conteggi per ogni sentimento e ne fa il grafico in base alla soglia di conteggio definibile tramite argomento.
+
+La funzione words.computeSentiment permette di classificare termini, bigrammi e trigrammi a seconda del sentimento corrispondente nei dataset "bing" e "afinn". Calcola i conteggi per ogni parola divisa per sentimento e ne fa il grafico in base alla soglia di conteggio definibile tramite argomento.
+
+ Si è anche definita una funzione _words.network_ per visualizzare le relazioni tra i termini presenti nei bigrammi sotto forma di grafo. 
+
+
+```{r sentiment-function}
+
+## function for print number of word for each sentiment in nrc df 
+# data :: word_frequency
+# n_filter_sentiment :: value to filter number of sentiment for pritty plot
+# ngrams :: {1,2,3} for compute corpus on ngrams
+words.classSentiment <- function(data, n_filter_sentiment, ngrams=1){
+   # inner join with nrc sentiment
+   if(ngrams == 3 ){
+      sentiment_class <- data %>%
+         # join sentiment with each word 
+         inner_join(get_sentiments("nrc"), by=c('word1' = 'word')) %>%
+         inner_join(get_sentiments("nrc"),by=c('word2' = 'word')) %>%
+         inner_join(get_sentiments("nrc"),by=c('word3' = 'word')) %>%
+         # merge sentiment
+         unite(sentiment, c("sentiment.x", "sentiment.y", "sentiment"), sep="-") %>%
+         # group and count 
+         group_by(sentiment) %>% 
+         summarise(word_4_sentiment = n()) %>% 
+         arrange(-word_4_sentiment, sentiment)
+      
+      # plot number of word for each sentiment class
+      plot <- sentiment_class %>% 
+         filter(word_4_sentiment > n_filter_sentiment ) %>%
+            ggplot(aes(word_4_sentiment, sentiment, fill=sentiment)) + 
+            geom_col( show.legend = FALSE) + 
+            xlab("") +
+            theme_minimal() 
+      
+            
+   } else if(ngrams == 2 ){
+      sentiment_class <- data %>%
+         inner_join(get_sentiments("nrc"), by=c('word1' = 'word')) %>%
+         inner_join(get_sentiments("nrc"),by=c('word2' = 'word')) %>%
+         unite(sentiment, c("sentiment.x", "sentiment.y"), sep="-") %>%
+         group_by(sentiment) %>% 
+         summarise(word_4_sentiment = n()) %>% 
+         arrange(-word_4_sentiment, sentiment) 
+      
+         
+      plot <- sentiment_class %>% 
+               filter(word_4_sentiment > n_filter_sentiment ) %>%
+                  ggplot(aes(word_4_sentiment, sentiment, fill=sentiment)) + 
+                  geom_col( show.legend = FALSE) + 
+                  xlab("") +
+                  theme_minimal() 
+      
+      
+   } else {
+      sentiment_class <- data %>%
+         inner_join(get_sentiments("nrc"), by=c('words'= 'word')) %>%
+         group_by(sentiment) %>%
+         summarise(word_4_sentiment = n()) %>% 
+         arrange(-word_4_sentiment, sentiment) 
+      
+      plot <- sentiment_class %>% 
+               #filter(word_4_sentiment > 2500 ) %>%
+                  ggplot(aes(word_4_sentiment, sentiment, fill=sentiment)) + 
+                  geom_col( show.legend = FALSE) + 
+                  xlab("") +
+                  theme_minimal() 
+   }
+   
+   
+   print(plot)
+   return(sentiment_class)
+}
+
+
+
+
+
+## function for print words splited by sentiment
+# data :: word_frequency 
+# n_filter :: value to filter words by count for pritty plot
+# ngrams :: {1,2,3} for compute corpus on ngrams
+words.computeSentiment <- function(data, n_filter=20, ngrams=1, plot = TRUE){
+   
+   if(ngrams == 2){
+      ## with affin --> mean between value.x & value.y
+      ## with bing 
+         ## positive - positive --> positive
+         ## positive - negative --> neutral
+         ## negative - positive --> neutral
+         ## negative - negative --> negative
+      
+      sentiment_df <- data %>% 
+            inner_join(get_sentiments("afinn"), by=c('word1'= 'word')) %>%
+            inner_join(get_sentiments("bing"), by=c('word1'= 'word')) %>%
+            inner_join(get_sentiments("afinn"), by=c('word2'= 'word')) %>%
+            inner_join(get_sentiments("bing"), by=c('word2'= 'word')) %>%
+            mutate( affin = (value.x + value.y) / 2) %>%
+            mutate( bing = case_when(sentiment.x == 'positive' & 
+                                        sentiment.y == 'positive' ~ 'positive', 
+                                     sentiment.x == 'negative' & 
+                                        sentiment.y == 'negative' ~ 'negative',
+                                     TRUE ~ 'neutral')) %>%
+            unite(words, c("word1", "word2"), sep = " ") 
+         
+      if(plot){
+      p <- sentiment_df %>%
+         dplyr::filter( count > n_filter ) %>%  
+         # compute normalize value of sentiment 
+         mutate( affin_nrm = range01(affin)) %>%
+         ggplot( aes(words, count,  color = affin_nrm)) +
+            geom_jitter(alpha = 0.2, width=0.2, height = 0.1) + 
+            geom_text(aes(label = words), check_overlap = TRUE, vjust = 1.5) + 
+            scale_y_log10() + 
+            # split positive - negative 
+            facet_wrap(bing~.) +
+            theme_minimal() + 
+            theme(axis.text.x=element_blank(), 
+                  legend.position = "bottom") + 
+            labs( color = "Sentiment degree")
+      }
+
+      
+   } else if(ngrams == 3){
+            
+      sentiment_df <- data %>% 
+            inner_join(get_sentiments("afinn"), by=c('word1'= 'word')) %>%
+            inner_join(get_sentiments("bing"), by=c('word1'= 'word')) %>%
+            inner_join(get_sentiments("afinn"), by=c('word2'= 'word')) %>%
+            inner_join(get_sentiments("bing"), by=c('word2'= 'word')) %>%
+            inner_join(get_sentiments("afinn"), by=c('word3'= 'word')) %>%
+            inner_join(get_sentiments("bing"), by=c('word3'= 'word')) %>%
+            mutate( affin = (value.x + value.y + value) / 3) %>%
+            mutate( bing = case_when(sentiment.x == 'positive' & 
+                                        sentiment.y == 'positive' & 
+                                        sentiment == 'positive' ~ 'positive', 
+                                     sentiment.x == 'negative' & 
+                                        sentiment.y == 'negative' & 
+                                        sentiment == 'negative' ~ 'negative',
+                                     
+                                     sentiment.x == 'positive' & 
+                                        sentiment.y == 'positive' & 
+                                        sentiment == 'negative' ~ 'neutral-positive',
+                                     sentiment.x == 'positive' & 
+                                        sentiment.y == 'negative' & 
+                                        sentiment == 'positive' ~ 'neutral-positive',
+                                     sentiment.x == 'negative' & 
+                                        sentiment.y == 'positive' & 
+                                        sentiment == 'positive' ~ 'neutral-positive',
+                                     
+                                     TRUE ~ 'neutral-negative')) %>%
+            unite(words, c("word1", "word2", "word3"), sep = " ") 
+         
+      if(plot){
+      p <- sentiment_df %>%
+         dplyr::filter( count > n_filter ) %>%  
+         mutate( affin_nrm = range01(affin)) %>%
+         
+         ggplot( aes(words, count,  color = affin_nrm)) +
+            geom_jitter(alpha = 0.2, width=0.2, height = 0.1) + 
+            geom_text(aes(label = words), check_overlap = TRUE, vjust = 1.5) + 
+            scale_y_log10() + 
+            facet_wrap(bing~.) +
+            theme_minimal() + 
+            theme(axis.text.x=element_blank(), 
+                  legend.position = "bottom") + 
+            labs( color = "Sentiment degree")
+      }
+   } else {
+   # plot positive-negative -- color: how much positive/negative is a word
+      sentiment_df <- data %>% 
+            inner_join(get_sentiments("afinn"), by=c('words'= 'word')) %>%
+            inner_join(get_sentiments("bing"), by=c("words" = "word"))
+      
+      if(plot){
+      p <- sentiment_df %>%
+         dplyr::filter( count > n_filter ) %>%  
+         mutate( value_std = range01(value)) %>%
+         
+            ggplot( aes(words, count,  color = value_std)) +
+               geom_jitter(alpha = 0.2, width=0.2, height = 0.1) +
+               geom_text(aes(label = words), check_overlap = TRUE, vjust = 1.5) + 
+               facet_wrap(sentiment~.) +
+               scale_y_log10() + 
+               theme_minimal() + 
+               theme(axis.text.x=element_blank(), 
+                     legend.position = "bottom") + 
+               labs( color = "Sentiment degree")
+      }
+   }
+   
+   if(plot){ print(p) }
+   return(sentiment_df)
+}
+
+
+words.network <- function(data, n_filter=1000){
+   
+   word_graph <- data %>%
+      filter(count > n_filter) %>%
+      as_tbl_graph()
+   
+   a <- grid::arrow(type = "open", length = unit(.1, "inches"))
+   
+   graph <- ggraph(word_graph, layout = "fr") +
+        geom_edge_link(aes(edge_alpha = count), show.legend = FALSE,
+                       arrow = a, end_cap = circle(.07, 'inches')) +
+        geom_node_point(color = "lightblue", size = 1) +
+        geom_node_text(aes(label = name), vjust = 1.5, hjust = 1) +
+        theme_void()
+   
+   print(graph)
+}
+```
+
+
+## DogeCoin's Subreddit
+
+I primi dati che andremo ad analizzare sono quelli relativi al subreddit di DogeCoin, riferiti alla medesima cryptovaluta la cui frase di presentazione è: "Dogecoin è una criptovaluta open source e peer-to-peer, amata dagli Shiba Inu di tutto il mondo.". Un ulteriore curiosità è che il logo raffigurante la razza di cane simbolo di questa valuta è tratto da dei meme popolari sul web. Questa cryptomoneta ha avuto molto successe dal momento in cui una grossa comunità ha iniziato a parlarne su diversi social, come TikTok e Reddit. 
+
+### Overview of Doge Raw Dataset 
+
+Come prima cosa scarichiamo i dati riguardanti il subreddit da analizzare.
+
+```{r eval = FALSE}
+
+path='doge_com_raw_data'
+if(!(exists(path))){
+   doge_com_raw_data <- read.csv("../Data/src/dogecoin_com.csv")
+}
+
+# create and save data (df + corpus)
+data = df.create(doge_com_raw_data, "../Data/", "dogecoin", filter_post = 0)
+
+remove(doge_com_raw_data)
+    
+```
+
+Facciamo un summary dei dataframe per venderne il contenuto: 
+
+```{r}
+if(save){ data <- readRDS("../Data/dogecoin.rds") }
+
+print_("REDDIT's COMMENT DF: ")
+data$df_comm %>%
+   select(id, date, author)
+print_("REDDIT's POST DF: ")
+summary(data$df_post)
+```
+
+L'oggetto _data_ oltre a contenere i dataframe, contiene anche i corpus di testo per poter eseguire la tokenizzazione. Tramite argomento è possibile scegliere se mantenere o meno le stop words.
+
+```{r doge-unigram-stat}
+
+# raw corpus 
+com_doge <- corpus.tokenize_dfmTidy(data$corpus_comm)
+print_("REDDIT's COMMENT CORPUS: ")
+print(com_doge$dfm)
+
+post_doge <- corpus.tokenize_dfmTidy(data$corpus_post, remove_stop = FALSE)
+print_("REDDIT's POST CORPUS: ")
+print(post_doge$dfm)
+
+remove(data)
+```
+
+Avendo scelto di mantenere le stopwords nel corpus relativo i post e di rimuoverle in quello relativo ai commenti possiamo calcolare la differenza dei token tra i due corpus.
+
+```{r}
+print_("Difference of features between comments and post:")
+nfeat(post_doge$dfm) - nfeat(com_doge$dfm)
+```
+
+La differenza dei tokens risulta molto piccola, probilmente perchè non essendo ancora stata eseguita una pulizia del testo, molte stop words non vengono riconosciute come tali. 
+
+```{r}
+com_doge_tidy <- com_doge$tidy
+post_doge_tidy <- post_doge$tidy
+com_doge_dfm <- com_doge$dfm
+post_doge_dfm <- post_doge$dfm
+
+remove(com_doge)
+remove(post_doge)
+```
+
+Dopo aver rimosso dall'ambiente gli oggetti che occupano una quantità di memoria eccessiva, vediamo alcune statistiche descrittive dei dataset. 
+
+```{r}
+print_("CELLS of mem FOR DFM")
+print(prod(dim(com_doge_dfm)))
+print_("SPARSITY FOR dfm")
+print(sparsity(com_doge_dfm))
+
+print_("CELLS of mem FOR post DFM")
+print(prod(dim(post_doge_dfm)))
+print_("SPARSITY FOR post dfm")
+print(sparsity(post_doge_dfm))
+```
+
+```{r include=FALSE}
+remove(com_doge_dfm)
+remove(post_doge_dfm)
+```
+
+Si potrebbe utilizzare la funzione _dfm\_trim_ per eliminare alcune parole del vocabolario con conteggi di basso valore. In tal modo si potrebbero convertire gli oggetti tidy da liste a data.frame o meglio sarebbe utilizzare la libreria _tiytable_ per le sue performance nella manipolazione dei dati. 
+
+```{r}
+
+# clean tokens
+com_clean_tidy <- corpus.clean_tidy(com_doge_tidy, mode = "none")
+
+#print("CLEAN COMMENT CORPUS: ")
+com_clean_dfm <- com_clean_tidy %>%
+   cast_dfm(document, words, count)
+
+print_("COLS of TIDY DF")
+print(colnames(com_clean_tidy))
+print_("TYPE OF TIDY DF")
+print(typeof(com_clean_tidy))
+
+
+remove(com_clean_tidy)
+
+post_clean_tidy <- corpus.clean_tidy(post_doge_tidy, mode = "none")
+
+#print("CLEAN POST CORPUS: ")
+post_clean_dfm <- post_clean_tidy %>%
+   cast_dfm(document, words, count)
+
+remove(post_clean_tidy)
+
+
+print_("CLEAN COMMENT CORPUS DIM (docsxtoks): ")
+print(dim(com_clean_dfm))
+print_("CLEAN POST CORPUS DIM: (docsxtoks)")
+print(dim(post_clean_dfm))
+
+
+```
+
+Dopo aver effettuato una prima pulizia del testo possiamo notare come sia calato il numero di tokens presenti nel corpus, questo perchè sono state rimosse molte onomatopee presenti nel liguaggio dei social, come le risate e parole contenti solo due caratteri. 
+
+Attraverso la prima funzione definita, con l'ausilio del pacchetto quanteda andiamo a calcolare e visualizzare la frequenza delle parole a cui viene associato un rank. 
+
+```{r}
+freq <- dfm.frequency(com_clean_dfm, 8000)
+head(freq, 10)
+```
+
+Guardando la frequenza delle parole nel testo, si può notare come ci sia una relazione proporzionale inversa tra la frequenza della parola e il suo rank nella tabella di contigenza, seguendo la ZipF Law [@zipfLaw]. 
+
+$$
+p_r = \alpha * 1/r 
+$$
+
+dove r è il rank assegnato ad ogni parola del testo. Per molti testi $\alpha$ è circa pari 1, come mostrato dalla ZipF's Law. 
+Andando a visualizzare il rango e la frequenza in scala logaritmica, la curva dovrebbe avere quindi coefficente angolare pari a 1. 
+
+```{r}
+# frequency dfm clean - with stop words
+freq <- dfm.frequency(post_clean_dfm, 8000)
+head(freq, 10)
+```
+
+Si può vedere come le parole con rank alti non rispecchiano quella che è la legge teorica, dove le frequenze sono meno di quelle previste. Questo perchè nei nostri testi abbiamo un'abbondanza di parole comuni superiore a parole considerate più rare, probabilmente dovute alla semplicità e brevità delle frasi che vengono scritte in un social media. 
+
+Proviamo ad utlizzare la statistica _tfidf_ sul corpus dei post, per vedere se ci sia qualche differenza nelle parole considerate più frequenti. 
+
+```{r tfidf-post}
+# compute tfidf 
+tfidf <- dfm_tfidf(post_clean_dfm)
+topfeatures(tfidf)
+```
+
+```{r include=FALSE}
+remove(com_clean_dfm)
+remove(post_clean_dfm)
+
+remove(freq)
+remove(tfidf)
+```
+
+##### And with stemming? 
+
+Proviamo ad eseguire le medesime operazioni utilizzando però lo stemming, per raggruppare parole con la stessa radice. Eseguiamo quindi la pulizia dei tokens utilizzando l'argomento _mode = 'stem'_ per eseguire lo stemming su di essi. 
+
+```{r stemming}
+
+com_clean_tidy_stem <- corpus.clean_tidy(com_doge_tidy, mode = "stem")
+
+com_clean_dfm_stem <- com_clean_tidy_stem %>%
+   cast_dfm(document, words, count)
+#print(com_clean_dfm)
+
+post_clean_tidy_stem <- corpus.clean_tidy(post_doge_tidy, mode = "stem")
+
+post_clean_dfm_stem <- post_clean_tidy_stem %>%
+   cast_dfm(document, words, count)
+#print(post_clean_dfm)
+```
+
+```{r}
+print_("CLEAN COMMENT CORPUS DIM (docsxtoks): ")
+print(dim(com_clean_dfm_stem))
+print_("CLEAN POST CORPUS DIM: (docsxtoks)")
+print(dim(post_clean_dfm_stem))
+
+print_("COLS of TIDY DF")
+print(colnames(com_clean_tidy_stem))
+print_("TYPE OF TIDY DF")
+print(typeof(com_clean_tidy_stem))
+```
+
+```{r}
+# frequency dfm clean - with stemming
+freq <- dfm.frequency(com_clean_dfm_stem, 8000)
+head(freq, 10)
+```
+
+Avendo ridotto alla radice le parole, le frequenze di alcune sono aumentate, come per esempio _hold_ ha subito una variazione sul valore di rank proprio per il fatto che tutti i verbi sono stati ridotti alla loro radice. 
+
+```{r}
+# frequency dfm clean - with stop words - stemming
+freq <- dfm.frequency(post_clean_dfm_stem, 8000)
+head(freq, 10)
+```
+
+
+Tra le parole con i primi rank non compaiono solo stopwords, potrebbe essere a causa dei messaggi corti o relazionato agli errori di battitura. 
+
+
+```{r clean-env-textstat, include = FALSE}
+
+remove(com_clean_tidy_stem)
+remove(post_clean_tidy_stem)
+
+remove(post_clean_dfm_stem)
+remove(com_clean_dfm_stem)
+
+remove(freq)
+remove(post_doge_tidy)
+remove(com_doge_tidy)
+
+```
+
+##### Tokenization of Bigrams
+
+```{r}
+
+if(save){ 
+   data <- readRDS("../Data/dogecoin.rds") 
+   
+}else{
+   if(!(exists('doge_com_raw_data'))){
+   doge_com_raw_data <- read.csv("../Data/src/dogecoin_com.csv")
+   }
+
+   # create and save data (df + corpus)
+   data <- df.create(doge_com_raw_data, "Data", "dogecoin", filter_post = 0)
+   remove(doge_com_raw_data)
+}
+
+post_corpus <- data$corpus_post
+comm_corpus <- data$corpus_comm
+remove(data)
+```
+
+```{r bigrams-stat}
+# problem in knit
+com_doge <- corpus.tokenize_dfmTidy(comm_corpus, ngrams = 2, dfm_b = FALSE)
+remove(comm_corpus)
+
+# post_doge <- corpus.tokenize_dfmTidy(post_corpus, ngrams = 2, dfm_b = FALSE)
+
+# com_tidy <- com_doge
+# post_tidy <- post_doge
+
+# remove(com_doge)
+# remove(post_doge)
+```
+
+```{r}
+com_clean_tidy <- corpus.clean_tidy(com_doge, ngrams = 2)
+remove(com_doge)
+
+print_("CLEAN COMMENT CORPUS: ")
+com_clean_bigram_dfm <- com_clean_tidy %>%
+   cast_dfm(document, words, count)
+print(com_clean_bigram_dfm)
+
+remove(com_clean_tidy, com_clean_bigram_dfm)
+
+# post_clean_tidy <- corpus.clean_tidy(post_tidy, ngrams = 2)
+# remove(post_tidy)
+# 
+# print_("CLEAN POST CORPUS: ")
+# post_clean_bigram_dfm <- post_clean_tidy %>%
+#    cast_dfm(document, words, count)
+# print(post_clean_bigram_dfm)
+```
+
+### Summary table
+
+Si mostra la tabella di contingenza prima di aver applicato la correzione del dizionario: 
+
+|      DogeCoin Corpus** | Type  | # Comment | # Post *  |
+| -------------------: | ----- | --------- | --------- |
+|         #num of docs | Raw   | 1,956,662 |  185,823  |
+|                      | Clean | 1,848,743 |  182,679  |
+|         #num of toks | Raw   | 198,537   |  198,709  |
+|                      | Clean | 140,231   |  140,241  |
+|                      |       |           |           |
+|                      |       |           |           |
+| #num of docs bigrams | Raw   | 1,956,656 |  185,823  |
+|                      | Clean | 1,569,893 |  172,952  |
+| #num of toks bigrams | Raw   | 3,597,421 | 4,165,904 |
+|                      | Clean | 3,189,821 | 3,646,399 |
+```
+* with stop words
+** tokens not unique 
+```
+
+Nella sezione riferita all'analisi delle frequenze andremo a rimuovere le stop words per vedere quali siano le parole significative del dataset con maggior influenza.
+
+```{r include=FALSE}
+remove(com_doge)
+remove(post_doge)
+
+remove(post_clean_tidy)
+remove(post_clean_bigram_dfm)
+```
+
+### Analize uncorrect words
+
+Essendo i corpus di testo recuperati da un social media, perciò dalle parole digitate non ci si aspetta la correttezza ortografica. Sono quindi state utilizzate le funzioni della libreria _hunspell_ [@hunspell], che permettono di verificare se una parola risulta corretta o meno, rispetto al loro dizionario  e di individuare una lista di suggerimenti per la correzione.
+
+```{r}
+
+if(save){ 
+   data <- readRDS("../Data/dogecoin.rds") 
+}else{
+   doge_com_raw_data <- read.csv("../Data/src/dogecoin_com.csv")
+   
+   # create and save data (df + corpus)
+   data <- df.create(doge_com_raw_data, "Data", "dogecoin", filter_post = 0)
+   remove(doge_com_raw_data)
+}
+
+post_doge <- corpus.tokenize_dfmTidy(data$corpus_post, remove_stop = FALSE)
+post_clean_tidy <- corpus.clean_tidy(post_doge$tidy, mode = "none")
+
+remove(data)
+remove(post_doge)
+```
+
+Ricaricati i dati in memoria, si va a conteggiare il numero di tokens riconosciuti come corretti o meno nel corpus riferito ai post. 
+
+```{r spell-checking-words}
+
+correct_post <- post_clean_tidy %>%
+   distinct(words) %>%
+   mutate(check = hunspell_check(words)) 
+   
+print(summary(correct_post$check))
+
+perc_f <- sum( correct_post$check == FALSE) / dim(correct_post)[1] * 100
+perc_t <- sum( correct_post$check == TRUE) / dim(correct_post)[1] * 100
+
+print_(paste0("UNCORRECT WORDS ", round(perc_f, 2), "% of total words", sep = " "))
+print_(paste0("CORRECT WORDS ", round(perc_t, 2), "% of total words", sep = " "))
+```
+
+Come si è potuto vedere dai precedenti risultati, il numero di parole classificate come lessicalmente non corrette risulta molto alto. Si è provato quindi a recuperare almeno le parole maggiormente influenti nel dataset.
+
+
+```{r spell-checking-words2}
+
+correct_post <- post_clean_tidy %>%
+   mutate(check = hunspell_check(words)) 
+   
+
+print(summary(correct_post))
+remove(post_clean_tidy)
+```
+
+La seguente funzione, oltre ad aggregare i conteggi delle parole ripetute avendo un id del documento diverso, aggiunge al dataframe una colonna con valori booleani per indicare se la parola risulta corretta o meno. Da notare come molte parole non comuni, come per esempio 'dogecoin', non vengono classificate come corrette. 
+
+```{r def-spell-checking}
+words.check_correct_word <- function(data, words){
+   # counts word
+   com_counts <- corpus.countPlot_tidy(data, bool_plot_count = FALSE, 
+                                                bool_plot_frequency = FALSE)
+   #print(com_counts)
+   # check words
+   com_correct <- com_counts %>%
+       mutate.(check = hunspell_check(words)) 
+   
+   print(paste0("RAW WORDS: ", dim(com_correct)[1], sep = " "))
+   
+   # aggregate for words
+   correct_unique <- aggregate(count ~ words+check, data=com_correct, FUN=sum)
+   
+   # extract correct 
+   correct <- correct_unique %>%
+      filter(check == TRUE) 
+   
+   print_(paste0("CORRECTS WORDS: ", dim(correct)[1],  "   ", 
+                round((dim(correct)[1]/dim(correct_unique)[1])*100, 2),
+                "%", sep = " "))
+   
+   
+   # extract uncorrect 
+   uncorrect <- com_correct %>%
+      filter(check == FALSE) 
+     
+      
+   print_(paste0("UNCORRECTS WORDS: ", dim(uncorrect)[1], "   ",  
+                round(dim(uncorrect)[1]/dim(correct_unique)[1]*100, 2),
+                "%", sep = " "))
+   
+   return(list(correct=correct, uncorrect=uncorrect))
+}
+
+```
+
+La precedente funzione potrà esser utilizzata anche per analizzare gli altri dataset raccolti. 
+
+```{r perform-check-spelling}
+# spell checking add counts and freq.
+df <- words.check_correct_word(correct_post, words)
+correct_post <- df$correct
+uncorrect_post <- df$uncorrect
+
+remove(df)
+remove(correct_post)
+```
+
+Una volta estratte le parole riconosciute come corrette e divise da quelle non corrette possiamo procedere all'analisi e correzione. Per iniziare, andiamo a calcolare per ciascuna parola la sua lemmatizzazione e lo stemming, che potranno esser utili per calcolare le distanze tra stringhe e prendere una decisione sulla correzione da effettuare. 
+
+```{r build-uncorrect-df}
+
+uncorrect_stem_lem <- uncorrect_post %>%
+   cbind(term_stem = uncorrect_post$words) %>%
+   cbind(term_lem = uncorrect_post$words) %>%
+   word.manipulation(term_stem, mode = 2) %>%
+   word.manipulation(term_lem, mode = 1) %>%
+   rename(term = words)
+
+dim(uncorrect_stem_lem)
+summary(uncorrect_stem_lem)
+```
+
+Sempre a causa degli errori grammaticali, certe parole, ma sopratutto certe stopwords, non vengono riconosciute e i suggerimenti per la correzione risultano a loro volta sbagliati. Di seguito una prima funzione per effettuare una correzione manuale della parola, altrimenti si chiama la funzione _hunspell\_suggest_ da cui viene preso il primo elemento suggerito. 
+
+Eseguiamo questa funzione all'interno di una pipe di _dplyr_, per poi aggiungere al dataset le distanze tra le diverse stringhe nella lista. 
+
+```{r suggest-words}
+
+words.spell_checking <- function(data, input) {
+   data %>%
+      mutate( suggest = 
+             case_when(
+               # any manual corrections
+               {{input}} == 'gbp' ~ 'gbp',
+               {{input}} == 'halving' ~ 'halving',
+               {{input}} == 'aways' ~ 'away',
+               {{input}} == 'covid' ~ 'covid',
+               {{input}} == 'binance' ~ 'binance',
+               {{input}} == 'stonks' ~ 'stonks',
+               {{input}} == 'cryptocurrency' ~ 'cryptocurrency',
+               {{input}} == 'cryptocurrencies' ~ 'cryptocurrency',
+               
+               {{input}} == "didn" ~ "did not", 
+               {{input}} == "doesn" ~ "does not", 
+               {{input}} == "aren" ~ "are not", 
+               {{input}} == "isn" ~ "is not", 
+               {{input}} == "isnt" ~ "is not",
+               {{input}} == "wasn" ~ "was not", 
+               {{input}} == "weren" ~ "were not", 
+               {{input}} == "couldn" ~ "could not",
+               {{input}} == "wasnt" ~ "was not", 
+               {{input}} == "wouldn" ~ "would not", 
+               {{input}} == "wouldnt" ~ "would not",
+               {{input}} == 'hadn' ~ 'had not', 
+               
+               {{input}} == "ive" ~ "i have",
+               {{input}} == "youre" ~ "you are",
+               
+               # check and (if required) correct spelling
+               !hunspell_check({{input}}) ~
+                  hunspell_suggest({{input}}) %>%
+                  # get first suggestion, or NA if suggestions list is empty
+                  map(1, .default = NA) %>%
+                  unlist() %>%
+                  tolower(),
+               TRUE ~ {{input}} # if word is correct
+            ))
+            # if input incorrectly spelled but no suggestions, return input word
+           # ifelse(is.na(output), {{input}}, output)
+}
+
+# apply suggest
+suggest_stem_corFalse <- uncorrect_stem_lem %>%
+   words.spell_checking(term) %>%
+   mutate(dist_term = stringdist::stringdist(term, suggest, "lv")) %>%
+   mutate(dist_stem = stringdist::stringdist(term_stem, suggest, "lv")) %>%
+   mutate(dist_source_stem = stringdist::stringdist(term, term_stem, "lv")) %>%
+   mutate(dist_lem = stringdist::stringdist(term_lem, suggest, "lv")) %>%
+   select(count, term, suggest, term_stem, term_lem, dist_term, dist_source_stem)
+
+
+if(save){ write_rds(suggest_stem_corFalse, "../Data/doge_suggest.rds") }
+
+remove(uncorrect_stem_lem)
+remove(uncorrect_post)
+
+
+```
+
+Siamo andati a calcolare la _distanza di levenshtein_ tra la parola data, il suggerimento e lo stemming della parola inziale, questo per poter scegliere in base ad essa se utilizzare il suggerimento o lo stemming del termine. 
+
+Possiamo adesso effettuare una correzione più precisa delle parole che presentano delle frequenze nel testo abbastanza alte, tali da esser influenti nell'analisi. Nel seguente codice ci riferiremo con '_large dictionary_' al dizionario che contiene le parole con i conteggi più alti e con '_medium_' la fascia mediana, i loro nomi non rispecchiano quindi le dimensioni del dataset. 
+
+Prima di procedere, come abbiamo detto precedentemente, molte stopwords non vengono riconosciute come tali. Per riconoscerne un numero maggiore, aggiungiamo alla lista delle stopwords data da hunspell le parole rimuovendo gli apostrofi e alcune parole troncate utilizzate nel linguaggio dei messaggi. 
+
+```{r dic_correction}
+if(save){ 
+   dic_suggest = readRDS("../Data/doge_suggest.rds") 
+} else { dic_suggest = suggest_stem_corFalse }
+remove(suggest_stem_corFalse)
+
+
+#  ????????
+#  holddddd         holddddd
+#  buyyyy           buyyyy
+word.little_correction <- function(input){
+   output <- case_when(
+      input == 'hodl' ~ 'hold',
+      input == 'obis' ~ 'boys', 
+      input == 'fuckin' ~ 'fucking', 
+      input == 'ios' ~ 'ios', 
+      input == 'gpu' ~ 'gpu', 
+      input == 'gme' ~ 'gme',
+      input == 'font' ~ 'dont',
+      input == 'stonks' ~ 'stonks',
+      grepl("^hold[d+]", input) ~ 'hold' ,
+      grepl("^s[o+]", input) ~ 'so', 
+      grepl("^g[o+]", input) ~ 'go',
+      grepl("^usa", input) ~ 'usa',
+      TRUE ~ input
+   )
+   ifelse(is.na(output), input, output)
+}
+
+
+## stop words from snowball
+stopwords <- get_stopwords(language = "en", source = "snowball")
+stopwords_ <- as.vector(stopwords$word)
+remove(stopwords)
+
+# augmented stopwords
+# take words whit ' 
+other <- purrr::keep(stopwords_, function(x) grepl("['-]+", x))
+other1 <- gsub("[[:punct:]]", "", other) 
+other2 <- unique( gsub("[[:punct:]][a-z]+", "", other) )
+ohter3 <- c("didn", "doesn", "aren", "isn", "wasn", "weren", "couldn", 	"hadn")
+
+stopwords <- c(stopwords_, other1, other2)
+remove(other, other1, other2)
+
+dim <- dim(dic_suggest)[1]
+```
+
+La correzione è stata effettuata con i seguenti passi: 
+
+* assegnare a una variabile colonna _flag_ un valore binario per indicare se la parola è presente tra le stopwords o meno.
+
+* Se la parola è una stopwords viene utilizzato il suggerimento ritornato da _hunspell_, altrimenti viene impostata come correzione lo stemming della parola.
+
+Dopo aver corretto le stopwords, si procede come segue: 
+
+* Se la distanza tra la stringa di partenza e il suo stemming è pari a 0, allora la parola non viene corretta non essendoci una radice riconoscible come stemming. 
+
+* Se la distanza sopra è maggiore di zero e la distanza tra la parola iniziale e il suggerimento di correzione è minore della distanza con la parola stemmizzata, viene utilizzata come correzione il suggerimento dato da _hunspell_.
+
+
+```{r large-dictionary}
+# dic with influence uncorret words 
+dic_l.tdb <- tidytable(dic_suggest) %>%
+      filter(count >= 500 ) %>%
+      cbind(flag = -1) %>%
+      cbind(correction = 'none') %>%
+      select.(count, term, term_stem, term_lem, suggest, flag, correction, dist_source_stem, dist_term) 
+   
+# flag if a word is in stopwords vec
+dic_l.tdb$flag = ifelse.(dic_l.tdb$term_stem %in% stopwords, 1, 0)
+
+# if is a stopwords, use suggested words
+dic_l.tdb$correction = ifelse.(dic_l.tdb$flag == 1, dic_l.tdb$suggest, dic_l.tdb$term_stem)
+
+# if lev dist from raw string and stem. string is 0 ..
+dic_l.tdb$correction = ifelse.(dic_l.tdb$dist_source_stem == 0 & 
+                                  dic_l.tdb$flag != 1, 
+                                      dic_l.tdb$term, dic_l.tdb$correction)
+
+dic_l.tdb$correction = ifelse.(dic_l.tdb$dist_source_stem != 0 &
+                                 dic_l.tdb$dist_term == 0 & 
+                                  dic_l.tdb$flag != 1 &
+                                  dic_l.tdb$dist_term < dic_l.tdb$dist_source_stem, 
+                                      dic_l.tdb$suggest, dic_l.tdb$correction)
+
+
+dic_l.tdb %>% 
+   filter( flag == 1 )
+
+print("stop words founded")
+print(sum(dic_l.tdb$flag))
+print("nrow large dictionary")
+print(nrow(dic_l.tdb))
+
+print("in %")
+print(sum(dic_l.tdb$flag)/ nrow(dic_l.tdb) * 100 )
+```
+
+
+```{r large-dictionary-2}
+
+dic_l <- dic_l.tdb %>%
+      mutate.( correction = word.little_correction(correction) ) %>%
+      select.(count, term, correction, flag) %>%
+      mutate.(check = hunspell_check(correction)) %>%
+      group_by(flag) %>%
+      arrange.(desc(count))
+
+print_("Number of words in my large dictionary")
+print(nrow( dic_l))
+
+```
+
+Si eseguono le medesime operazioni con le parole che hanno una frequenza compresa tra 100 e 500 esclusi. Ci si aspetta di trovare un minor numero di stop words, ma l'obiettivo è tentare di correggere il termine se possibile, se no stemmizzare la parola. 
+
+Un problema che non è stato risolto con questa correzione è quello dovuto a caratteri battuti come doppi all'interno delle parole, o comunque risolvere le occorrenze strane all'interno delle parole. Queste verranno escluse dall'analisi del testo, ma non potranno esser utilizzate nei conteggi delle parole, risultando inutili a livello di informazione che portano. 
+
+```{r medium-dictionary}
+
+# merge with dic of true word
+dic_m.tdb <- tidytable(dic_suggest) %>%
+   filter.( count > 100 & count < 500 ) %>%
+   cbind(flag = -1) %>%
+   cbind(correction = 'none') %>%
+   select.(count, term, term_stem, term_lem, suggest, flag, correction, dist_source_stem) 
+   
+# flag if a word is in stopwords vec
+dic_m.tdb$flag = ifelse.(dic_m.tdb$term_stem %in% stopwords, 1, 0)
+
+# if is a stopwords, use suggested words
+dic_m.tdb$correction = ifelse.(dic_m.tdb$flag == 1, dic_m.tdb$suggest, dic_m.tdb$term_stem)
+
+# if lev dist from raw string and stem. string is 0 ..
+dic_m.tdb$correction = ifelse.(dic_m.tdb$dist_source_stem == 0 & 
+                                  dic_m.tdb$flag != 1, 
+                                      dic_m.tdb$term, dic_m.tdb$suggest)
+print("stop words founded")
+print(sum(dic_m.tdb$flag))
+print("nrow medium dictionary")
+print(nrow(dic_m.tdb))
+
+print("in %")
+print(sum(dic_m.tdb$flag)/ nrow(dic_m.tdb) * 100 )
+```
+
+```{r medium-dictionary-2}
+
+dic_m <- dic_m.tdb %>%
+      mutate( correction = word.little_correction(correction) ) %>%
+      select(count, term, correction, flag) %>%
+      mutate.(check = hunspell_check(correction)) %>%
+      group_by(flag) %>%
+      arrange(desc(count))
+
+head(dic_m, 10)
+
+```
+
+
+```{r build-dictionary}
+
+dictionary = bind_rows(
+   dic_l %>% select.(term, correction), 
+   dic_m %>% select.(term, correction)
+   )
+
+if(save){ write_rds(dictionary, "../Data/dictionary.rds") }
+
+```
+
+```{r}
+
+remove(dic_l)
+remove(dic_m)
+remove(dic_m.tdb)
+remove(dic_l.tdb)
+remove(dic_suggest)
+
+```
+
+La correzione non è risultata molto precisa, ma si è riusciti a recuperare alcune parole influenti per la loro alta frequenza. 
+
+### Remake Corpus 
+
+Durante la correzione del testo abbiamo recuperato alcune parole digitate male e nel caso non ci fosse una correzione abbiamo applicato lo stemming. Si va quindi a sostituire i token del dataset di partenza. 
+
+
+```{r}
+
+if(save){
+   dict <- readRDS("../Data/dictionary.rds")
+} else {
+   dict = dictionary
+}
+remove(dictionary)
+
+dict <- dict %>% drop_na()
+dic_words <- dict$term
+correct <- dict$correction
+
+toks <- quanteda::tokens(dict$term)
+head(toks, 5)
+
+# test replace words
+toks2 <- tokens_replace(toks, dic_words, correct, valuetype = "fixed", case_insensitive = TRUE)
+
+head(toks2, 5)
+
+```
+
+Uniamo questa logica alla funzione _corpus.tokenize_dfmTidy_ che abbiamo definito precedentemente, in tal modo tramite argomento potremmo scegliere se utilizzare la sostituzione delle parole o meno. 
+
+Possiamo così creare il nostro nuovo corpus, sostituendo tutte le parole presenti nel nostro dizionario con la loro correzione. Si potrebbe correggere tutte le parole restanti (quelle con conteggi minori) utilizzando la lemmatizzazione. 
+
+
+```{r}
+
+if(save){data <- readRDS("../Data/dogecoin.rds")}
+
+post_doge_correct <- corpus.tokenize_dfmTidy(data$corpus_post, remove_stop = FALSE,
+                                             spell_checking = TRUE, 
+                                             mode_correction = 0)
+
+#if(save){write_rds(post_doge_correct, "../Data/post_doge_raw_myCorrection.rds")}
+```
+
+```{r}
+
+#if(save){ 
+#   remove(post_doge_correct)
+#   post_doge_correct <- readRDS("../Data/post_doge_raw_myCorrection.rds")
+#}
+
+tidy_doge_correct <- post_doge_correct$tidy
+dfm_doge_correct <- post_doge_correct$dfm
+remove(post_doge_correct)
+
+# zipFLaw
+dfm.frequency(dfm_doge_correct)
+remove(dfm_doge_correct)
+```
+
+Comparato al grafico delle frequenze visualizzato precedentemente si ha una situazione diversa. Infatti, il numero di stopwords con alte frequenze è aumentato e di conseguenza non si trova più parole specifiche del dataset nei primi posti. Dobbiamo però ancora processare i dati per la pulizia del testo, questo inciderà su molte stopwords.
+
+Abbiamo però alcuni tokens che dopo la manipolazione comprendono due termini, dobbiamo quindi separarli ed andare nuovamente ad aggregare i conteggi. 
+
+```{r}
+# cast to tidytable
+tidy_doge_correct <- tidytable(tidy_doge_correct)
+# split words
+post_doge_correct_tidy <- tidy_doge_correct %>% 
+    mutate.(term = strsplit(term, " ")) %>% 
+    unnest.(term)
+```
+```{r}
+# verify it
+post_doge_correct_tidy %>%
+   filter(term == 'did not')
+```
+
+```{r}
+
+dfm_correct_doge <- post_doge_correct_tidy %>%
+   cast_dfm(document, term, count)
+
+
+if(save){
+   write_rds(dfm_correct_doge, "../Data/post_doge_myCorrection.rds")
+}
+
+remove(tidy_doge_correct)
+remove(post_doge_correct_tidy)
+```
+
+
+### Overview of semi-clean Doge Dataset 
+
+Ripetiamo l'analisi del dataset con i token corretti per confrontarne i conteggi. 
+
+```{r}
+
+# create tokens with correction and stop words --> for sentiment 
+# create tokens with correction and without stop words  --> for counts 
+
+if(save){ 
+   remove(dfm_correct_doge)
+   data <- readRDS("../Data/post_doge_myCorrection.rds")
+} else {
+   data = dfm_correct_doge
+}
+
+# cast to tidy 
+data_tidy <- tidytext::tidy(data)
+
+```
+
+```{r doge-unigram-stat2}
+print("REDDIT's POST CORPUS with correction: ")
+print(summary(data_tidy))
+
+```
+
+
+```{r}
+
+# clean tokens
+post_clean_tidy <- corpus.clean_tidy(data_tidy, mode = "none")
+
+#print("CLEAN POST CORPUS: ")
+post_clean_dfm <- post_clean_tidy %>%
+   cast_dfm(document, words, count)
+#print(post_clean_dfm)
+
+
+print_("CLEAN POST CORPUS DIM: (docsxtoks)")
+print(dim(post_clean_dfm))
+print("COLS of TIDY DF")
+print(colnames(post_clean_tidy))
+print("TYPE OF TIDY DF")
+print(typeof(post_clean_tidy))
+```
+
+Analizziamo nuovamente il numero di parole corrette e tra quelle scorrette quali sono quelle con i conteggi maggiori. 
+
+```{r }
+
+df <- words.check_correct_word(post_clean_tidy, words)
+
+df$uncorrect %>%
+   arrange(desc(count))
+```
+
+Il contaggio delle parole corrette non è aumentato di molto, ma questo può esser causato anche dalle parole che _hunspell_ considera come scorrette. Infatti le parole più influenti considerante come scorrette in realtà possono essere considerate come corrette nel contesto in cui sono prese. 
+
+```{r }
+remove(df)
+```
+
+Si va quindi a vedere se il grafico delle frequenze abbia subito qualche cambiamento. 
+
+```{r}
+# frequency dfm clean - with stop words
+freq <- dfm.frequency(post_clean_dfm, 8000)
+head(freq, 10)
+```
+
+Anche in questo caso il grafico non ha avuto importanti cambiamenti. A differenza del grafico visualizzato prima di dividere i tokens che presentava una curva più in linea con la legge di ZipF, avendo separato molte stopwords sono aumentate le parole comuni.
+
+Si potrebbe valutare di utilizzare un correttore su tutti i token presenti, ma sarebbe necessario verificare che la correzzioni sia valida e non cambi completamente il significato della parola. 
+
+```{r}
+remove(post_clean_dfm)
+remove(post_clean_tidy)
+remove(dfm_correct_doge)
+remove(freq)
+```
+
+Per completezza andiamo ad analizzare i conteggi anche per i bigrammi creati a partire dai dati con alcune parole corrette. 
+
+```{r bigrams-stat2, eval=FALSE}
+# problem in knit
+if(save){data <- readRDS("../Data/dogecoin.rds")}
+post_corpus <- data$corpus_post 
+remove(data)
+
+post_doge <- corpus.tokenize_dfmTidy(post_corpus, 
+                                     remove_stop = FALSE, 
+                                     spell_checking = TRUE, 
+                                     mode_correction = 0,
+                                     ngrams = 2)
+print("REDDIT's POST CORPUS: ")
+print(post_doge$dfm)
+
+remove(post_corpus)
+```
+
+```{r bigrams-clean-txtstat2, eval =FALSE}
+# problem in knit
+post_clean_tidy <- post_doge$tidy
+remove(post_doge)
+post_clean_tidy <- corpus.clean_tidy(post_clean_tidy, ngrams = 2)
+
+print("CLEAN POST CORPUS: ")
+post_clean_bigram_dfm <- post_clean_tidy %>%
+   cast_dfm(document, words, count)
+print(post_clean_bigram_dfm)
+```
+
+
+|      DogeCoin Corpus | Type  | # Original Post | # Post *  |
+| -------------------: | ----- | --------- | --------- | 
+|         #num of docs | Raw   |  185,823  |  183,609  | 
+|                      | Clean |  182,679  |  182,646  | 
+|         #num of toks | Raw   |  198,709  |  198.473  | 
+|                      | Clean |  140,241  |  140,175  | 
+|     # hunspell check | TRUE  |  36,086   |  36,118   | 
+|                      |       |           |     |    
+| #num of docs bigrams | Raw   | 185,823   |  185,823  | 
+|                      | Clean | 172,952   |  174,777  | 
+| #num of toks bigrams | Raw   | 4,165,904 | 3,159,569 | 
+|                      | Clean | 3,646,399 | 2,316,567 | 
+```
+* with spell checker 
+** tokens not unique
+```
+
+```{r include = FALSE }
+remove(post_clean_bigram_dfm)
+remove(post_clean_tidy)
+```
+
+#### Words manipulation for sentiment
+
+Facciamo un'osservazione sul numero di parole che si andranno ad utilizzare per l'analisi dei sentimenti. 
+
+```{r doge-unigrams-manipulation, result='hide'}
+
+lab.dizCompare<- function(correction = TRUE, stop=FALSE){
+   
+   if(correction){
+      raw_data <- readRDS("../Data/post_doge_myCorrection.rds") # is a dfm
+      # transform from tidy table to tidy object 
+      raw_data <- tidytext::tidy(raw_data)
+   }
+
+   # clean tokens
+   corpus_stem <- corpus.clean_tidy(raw_data,  mode = "stem")
+   corpus_lem  <- corpus.clean_tidy(raw_data, mode = "lemma")
+   corpus_raw <- corpus.clean_tidy(raw_data, mode = "none")
+   
+   # counts tokens
+   count_stem <- corpus.countPlot_tidy(corpus_stem, 
+                                          plot = FALSE)
+   count_lem <- corpus.countPlot_tidy(corpus_lem, 
+                                         plot = FALSE)
+   count_raw <- corpus.countPlot_tidy(corpus_raw, 
+                                         plot = FALSE)
+   
+   remove(corpus_stem)
+   remove(corpus_lem)
+   remove(corpus_raw)
+   
+   # build sentiment
+   sentiment_stem <- words.computeSentiment(count_stem, plot=FALSE)
+   sentiment_lem <- words.computeSentiment(count_lem, plot=FALSE)
+   sentiment_raw <- words.computeSentiment(count_raw, plot=FALSE)
+   
+
+   word_raw.source <- as.set(count_raw$words)
+   word_lem.source <- as.set(count_lem$words)
+   word_stem.source <- as.set(count_stem$words)
+   
+   remove(count_stem)
+   remove(count_lem)
+   remove(count_raw)
+   
+   word_lem.sentiment <- as.set(sentiment_lem$words)
+   word_raw.sentiment <- as.set(sentiment_raw$words)
+   word_stem.sentiment <- as.set(sentiment_stem$words)
+   
+   s_raw <- set_cardinality(word_raw.source)
+   r_raw <- set_cardinality(word_raw.sentiment)
+   
+   s_lem <- set_cardinality(word_lem.source)
+   r_lem <- set_cardinality(word_lem.sentiment)
+   
+   s_stem <- set_cardinality(word_stem.source)
+   r_stem <- set_cardinality(word_stem.sentiment)
+   
+   print( paste("Source total words: ", s_raw, '--', "Words used raw x sentiment: ", r_raw))
+   print( paste("Source total words Lemmatization: ", s_lem, '--', "Words used lem x sentiment: ", r_lem))
+   print( paste("Source total words Stemming: ", s_stem, '--', "Words used stem x sentiment: ", r_stem))
+
+}
+
+```
+
+Analizziamo il numero di parole effettivamente utilizzate nella sentiment analysis andando a guardare le cardinalità dell'insieme di termini utilizzato nella sentiment analysis e l'insieme di termini di partenza. 
+
+```{r warining=FALSE }
+lab.dizCompare()
+```
+
+Oltre a darci un'indicazione su quante parole vengano utilizzate per il task dell'analisi dei sentimenti, possiamo anche vedere come la lemmatizzazione e lo stemming influiscano sul conteggio delle singole parole. 
+
+Nella nostra manipolazione dei termini non si è riusciti però a risolvere il problema di parole scorrette come le seguenti: 
+
+```
+# [976] "aggressiv"                                                                
+# [977] "aggressive"                                                               
+# [978] "aggressively"                                                             
+# [979] "aggressiveness"                                                           
+# [980] "aggresssiivvveeellly"  
+
+```
+
+
+### Final Analysis
+
+Una volta pulito il nostro dataset e prese le decisioni riguardo le manipolazioni da effettuare, andiamo ad analizzare la frequenza delle parole, cercando di capire quali siano i temi più influenti trattati nei commenti del subreddit di dogecoin. Per questa parte di analisi verranno rimosse le stopwords dal corpus e andremmo ad utilizzare lo stemming per raggruppare parole con la stessa radice.
+
+In questa sezione verrà proposta un'analisi del corpus del dataset corretto del subreddit di dogecoin, sia rispetto le singole parole presenti, sia utilizzando i bigrammi. 
+
+```{r, crop=TRUE}
+
+data <- readRDS("../Data/dogecoin.rds")
+doge_corpus <- data$corpus_comm
+remove(data)
+
+# remove stopwords!!              
+doge_tidy <- corpus.tokenize_dfmTidy(doge_corpus, 
+                                     spell_checking = TRUE, 
+                                     mode_correction = 0)
+doge_clean_tidy <- corpus.clean_tidy(doge_tidy$tidy, mode='stem' )
+doge_word_counts <- corpus.countPlot_tidy(doge_clean_tidy, threshold_count = 2000)
+
+```
+
+```{r, crop=TRUE}
+
+set.seed(190)
+
+dff <- doge_tidy$dfm
+# colour of words from least to most frequent
+textplot_wordcloud(dff, min_count = 10000,
+     color = c('pink', 'red', 'green3', 'purple', 'orange', 'blue3'))
+remove(dff)
+```
+
+Tra le parole più presenti, oltre a doge, possiamo notare parole come: 
+* buy
+* hold
+* moon
+* invest/keep
+
+
+```{r doge-unigrams-sentiment, crop=TRUE}
+words.classSentiment(doge_word_counts)
+```
+
+Tenendo conto che molte parole, magari offensive, vengano utilizzante in discussioni che non c'entrano molto con il mercato della moneta, la divisione in classi dei sentimenti ci fa vedere come ci siano un gran numero di parole classificate come negative.
+
+
+```{r doge-word-sentiment, crop=TRUE}
+doge_word_sentiment <- words.computeSentiment(doge_word_counts, n_filter = 10)
+```
+
+In questo grafico possiamo trovare parole interessanti divise in base alla loro positività. Nella parte negativa si può notare subito come 'dump', termine che in finanza significherebbe far sgonfiare il prezzo, sia molto utilizzata e attorno una serie di parole che non sono legate alla fiducia, ma al contrario fanno capire come il mercato di questa moneta non sia percepito come non stabile. Dall'altra parte ci sono parole che cercano di ingoraggiare all'investimento in dogecoin. 
+
+Andiamo però a visualizzare i bigrammi per vedere se queste parole prese con un minimo di contesto facciano presumere le stesse ipotesi. 
+
+
+```{r include = FALSE}
+remove(doge_tidy)
+remove(doge_clean_tidy)
+remove(doge_word_counts)
+remove(doge_word_sentiment)
+```
+
+
+```{r doge-bigrams, eval=FALSE, crop=TRUE}
+
+doge_tidy_bigrams <- corpus.tokenize_dfmTidy(doge_corpus, 
+                                          dfm_b = FALSE,
+                                          spell_checking = TRUE, 
+                                          mode_correction = 0, 
+                                          ngrams=2)
+
+doge_clean_tidy_bigrams <- corpus.clean_tidy(doge_tidy_bigrams$tidy,
+                                                     ngrams = 2)
+remove(doge_tidy_bigrams)
+
+saveRDS(doge_clean_tidy_bigrams, "../Data/bigrams_clean.rds")
+```
+
+Analizzando i bigrammi si può notare ancor più maggiormente che la gran parte delle parole si riferiscono a spingere gli utenti ad acquistare e mantenere i dogecoin nel proprio wallet digitale. 
+
+```{r doge-bigrams-sentiment, crop=TRUE}
+doge_clean_tidy_bigrams <- readRDS("../Data/bigrams_clean.rds")
+doge_bigrams_counts <- corpus.countPlot_tidy(doge_clean_tidy_bigrams, 
+                                                   threshold_freq = 0.0003,
+                                                   ngrams = 2)
+
+bigrams_class_sentiment <- words.classSentiment(doge_bigrams_counts, n_filter_sentiment = 10000, ngrams = 2)
+```
+
+Considerando le classi dei sentimenti sui bigrammi la situazione cambia un poco. Infatti i sentimenti positivi risultano maggiori, ma sempre con un po' di incertezza considerando i bigrammi in cui viene associato il sentimento di fiducia con sentimenti negativi. 
+
+```{r doge-bigrams-word-sentiment, crop=TRUE}
+bigrams_sentiment <- words.computeSentiment(doge_bigrams_counts, n_filter = 50, ngrams = 2)
+saveRDS(bigrams_sentiment, "../Data/bigrams_sentiment.rds")
+```
+
+Similmente andando a classificare ciascuna parola in una scala da 0 a 1, che indica la positività di un bigramma, il numero di parole negative sembra essere molto minore a quelle positive. 
+
+```{r doge-net-bigrams, crop=TRUE}
+words.network(doge_bigrams_counts, n_filter = 2000)
+```
+
+Dalle rete delle parole, con conteggi superiori a 2000, possiamo cogliere altre informazioni molto interessanti, come l'accostamento delle parole right e dips, che in ambito finanziario si potrebbero associare allo slogan "Buy the dips", con il significato di comprare un asset successivamente al suo crollo di prezzo. Un'altra osservazione può esser fatta sulla parola "buy" che presenta un numero di archi collegati superiore alla maggior parte delle parole oltre a 'doge'. 
+   
+Inoltre, a confermare l'ipotesi che gli utenti spingano all'acquisto e possesso di questa cryptovaluta, c'è l'accostamento della parola "stop" con "selling", proprio per incentivare a non vendere e quindi a non far calare di prezzo il valore dei dogecoin. 
+ 
+
+```{r include = FALSE}
+remove(doge_tidy_bigrams)
+remove(doge_bigrams_counts)
+
+remove(bigrams_class_sentiment)
+remove(bigrams_sentiment)
+```
+
+### Topic Analysis 
+
+Per eseguire l'analisi degli argomenti siamo andati a considerare come un unico testo tutti i commenti di uno stesso post. 
+
+```{r lda_data, crop=TRUE}
+
+data <- readRDS("../Data/dogecoin.rds")
+doge_corpus <- data$corpus_post
+remove(data)
+
+              
+doge_tidy <- corpus.tokenize_dfmTidy(doge_corpus, 
+                                     spell_checking = TRUE, 
+                                     mode_correction = 0)
+
+remove( doge_corpus)
+```
+
+La document term matrix risulta avere dimensioni troppo grandi per poterla utilizzare. Andiamo quindi ad utilizzare la fuzione _dfm\_trim_ per ridurre la sparisità della matrice. 
+
+```{r trimming}
+dfmTrimmed <- dfm_trim(doge_tidy$dfm, min_docfreq = 100, min_termfreq = 5000)
+remove(doge_tidy)
+```
+
+Per applicare la funzione LDA, è necessario che ogni riga della matrice di input contenga almeno una entry diversa da zero. Si deve quindi eliminare quei documenti in cui la somma delle frequenze di una parola è pari a zero. 
+
+```{r remove-zero}
+# delete row with all zeros 
+rowSum <- apply(dfmTrimmed , 1, sum)
+dfmTrimmed <- dfmTrimmed[rowSum> 0, ]
+remove(rowSum)
+```
+
+```{r lda}
+library(topicmodels)
+# Latent Dirichlet allocation
+doge_lda <- LDA(dfmTrimmed, k = 4, control = list(seed = 123456789))
+
+remove(dfmTrimmed)
+```
+
+Si va poi ad estrarre le probilità per ciascuna parola di appartenere ad un certo topic. 
+
+```{r beta-lda}
+doge_topics <- tidy(doge_lda, matrix = 'beta')
+```
+
+E ad analizzare i risultati ottenuti:
+
+```{r top-terms-lda}
+
+# the 10 terms that are most common within each topic
+doge_top_terms <- doge_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+head(doge_top_terms, 5)
+remove(doge_topics)
+
+doge_top_terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip() +
+  scale_x_reordered()
+```
+
+Come ci si poteva aspettare, essendo dei post già riferiti ad un solo argomento la classificazione in topic non risulta molto utile all'analisi. Nonostante ciò possiamo identificare delle relazioni tra le parole nei diversi topic. 
+
+Per esempio il topic numero 2 ha come argomento principale il dogecoin stesso, e parole legato al mondo delle cryptovalute come _wallet_ , _coins_, _bitcoin_.  
+
+Il topic numero 4 invece sembra riferirsi maggiormente all'ambito finanziario di investimenti e le parole associate ad esso come _robinhood_, probabilmente riferito al fatto che dogecoin è una moneta che ha ancora un prezzo molto basso ma che ha permesso l'investimento e guadagno anche di coloro che sognavano i Bitcoin.
+
+Le altre due classificazioni invece non sembrano avere una tematica comune chiara. 
+
+Si potrebbe modificare il parametro $\alpha$ per avere un tuning delle distribuzioni migliore, anche tenendo conto dei documenti corti.
+
+```{r include = FALSE}
+remove(dfmTrimmed, doge_lda, doge_top_terms, doge_topics)
+```
+
+### Comments per Time 
+
+Una volta che abbiamo associato i sentimenti ai bigrammi e fatto una prima analisi esplorativa del dominio, possiamo andare a vedere come si evolve il sentimento nel tempo e rapportarlo al numero di commenti effettuati e all'andamento del prezzo della moneta nel mercato. Si va quindi a visualizzare i grafici dell'andamento di numero di commenti per giornata sia del dataset complessivo, che del singolo anno 2021.
+
+
+```{r timexcomment}
+data <- readRDS("../Data/dogecoin.rds")
+doge_df <- data$df_comm
+#doge_corpus <- data$corpus_comm
+
+
+remove(data)
+
+plot_com_per_date <- function(dataset){
+
+   df_date <- dataset %>%
+      select(date, link_id) 
+      
+   plot <- 
+      df_date%>%
+      group_by(date) %>%
+      # retrieve comments for day 
+      summarise(n_com = n()) %>%
+      arrange(date) %>%
+      # plot..
+      ggplot(aes(date, n_com)) +
+         geom_line(size = 0.3) +
+         xlab("Date") + 
+         ylab("Number of Comment") + 
+         scale_y_log10() + 
+         geom_vline(xintercept = as.Date('2020-07-01'), color = 'green3', size = 0.2) +
+         geom_vline(xintercept = as.Date('2021-01-01'), color = 'orangered1', size = 0.2) +
+         geom_vline(xintercept = as.Date('2021-02-01'), color = 'orangered1', size = 0.2) +
+         geom_vline(xintercept = as.Date('2021-03-01'), color = 'orangered1', size = 0.2) +
+         geom_vline(xintercept = as.Date('2021-04-01'), color = 'orangered1', size = 0.2) +
+         geom_vline(xintercept = as.Date('2021-05-01'), color = 'grey', size = 0.2) +
+         theme_minimal()
+   
+   print(plot)
+}
+
+# plot for date of comment 
+plot_com_per_date(doge_df)
+
+```
+
+Possiamo identificare così i periodi di maggior attività degli utenti: 
+* Luglio 2020
+* Febbraio 2021
+* Aprile/Maggio 2021
+
+
+Come riportato da alcune notizie online il 13 luglio 2020, dopo una settimana di video virali su TikTok, Dogecoin è cresciuto del 35% in prezzo e del 2.000% in volume. Da quel momento in poi l'interesse per dogecoin è sempre più aumentato tra gli investitori. Oltre alla comparsa su TikTok si hanno i tweet scritti dal noto Elon Musk a inizio 2021, che hanno fatto ancor più crescere l'interesse verso questo mercato nell'anno corrente. 
+
+##### CoinMarketCap 
+
+Si va a visualizzare l'andamento del mercato relativo a Dogecoin per confrontarlo con le informazioni ricavate dai corpus dei commenti. Utilizzando la libreria messa a disposizione per R andiamo a dividere i dati nelle rispettive annate. 
+
+```
+
+library(coinmarketcapr)
+
+api = "e0d9472b-bd2a-475a-8f3d-272c24ab7fa9"
+coinmarketcapr::setup(api)
+coinmarketcapr::get_api_info()
+
+all_coins <- get_marketcap_ticker_all()
+
+head(all_coins, 10)
+summary
+
+```
+
+Prendiamo i dati di dogecoin attraverso il suo simbolo. 
+
+```
+
+get_crypto_listings()
+
+
+doge = coinmarketcapr::get_crypto_meta(symbol="DOGE")
+doge_2020 = coinmarketcapr::get_crypto_quotes(
+      symbol = c("DOGE"),
+      time_start = Sys.Date()-180, time_end=Sys.Date(), 
+      count = 10, interval = "30m"
+   )
+   
+
+
+p <- ggplot(historical_data) +
+     geom_line(aes(x=date,
+               y = close),
+           stat = "identity",
+           size=1) +
+  xlab("Time") +
+  ylab("Price (in USD)") + theme_minimal()s
+```
+
+
+Per avere l'accesso ai dati storici completi è necessario possedere la versione avanzata delle API messe a disposizione da CoinMarketCap. Utilizziamo allora i dati recuperati da *Yahoo! Finance*. Carichiamoli e prepariamoli per esser visualizzati. 
+
+```{r}
+
+dogeusd <- read.csv("../Data/DOGE-USD.csv")
+
+dogeusd %>%
+   select(Date, Low, High) %>%
+   mutate(Low = as.double(Low)) %>%
+   mutate(High = as.double(High)) %>%
+   mutate(Date = as.Date(Date)) %>%
+      # plot..
+      ggplot(aes(x=Date, y=Low)) +
+         geom_line( color = 'red', size = 0.3 ) +
+         geom_line(aes(y = High), color = 'green4', size = 0.3) +
+         xlab("Date") + ylab("Low-High price")  +
+         theme_minimal()
+
+dogeusd %>%
+   mutate(Date = as.Date(Date)) %>%
+   filter(month(Date) == "10" & year(Date) == "2020") %>%
+   head(10)
+
+
+```
+
+Abbiamo dei picchi insoliti nel grafico, andando a cercare nel dataframe il mese corrispondente si sono trovate 3 date mancanti, 10-12-13 Ottobre 2020. Andiamo a rimuovere i valori null e a disegnare nuovamente il grafico. 
+
+
+```{r 2021}
+
+doge_com_2021 <- doge_df %>%
+   filter( date > as.Date('2020-12-31'))
+
+com2021 <- plot_com_per_date(doge_com_2021)
+
+
+plot <- dogeusd %>%
+   mutate(Date = as.Date(Date)) %>%
+   filter( Date > as.Date('2020-12-31')) %>%
+   filter( Open != "null") %>%
+   select(Date, Low, High) %>%
+   mutate(Low = as.double(Low)) %>%
+   mutate(High = as.double(High)) %>%
+      # plot..
+      ggplot(aes(x=Date, y=Low)) +
+         geom_line( color = 'red', size = 0.3 ) +
+         geom_line(aes(y = High), color = 'green4', size = 0.3) +
+         xlab("Date") + ylab("Low-High price") + 
+         theme_minimal()
+
+print(plot + com2021)
+remove(plot, com2021, dogeusd, doge_com_2021)
+```
+
+Nonostante si possano trovare delle somiglianze nei grafici, come ad esempio il picco a inizio e Febbraio e la situazione instabile di Marzo, bisognerebbe tener conto della giornata lavorativa o meno, o comunque dell'attività storica degli utenti nel corso della settimana. Inoltre possiamo identificarlo come un evento non del tutto anormale, dal momento che arrivano molti utenti nuovi e vengono utilizzati slogan per invogliare le persone a comprare DOGE, più le persone discutono e interagiscono attraverso i commenti più potrebbero esser portate ad entrare in questo mercato. 
+
+#### Sentiment over Time
+
+Per dare un sentimento ad ogni commento, una volta asseganti i sentimenti a ciascuna parola nei bigrammi del commento, sarà necessario calcolare la polarità generale delle frasi in modo da capirne l'andamento nel tempo. 
+
+> Sentiment polarity for an element defines the orientation of the expressed sentiment, i.e., it determines if the text expresses the positive, negative or neutral sentiment of the user about the entity in consideration.
+
+Si è scelto di utilizzare il concetto di polarità unendolo alla tecnica _Lexicon based_ che consiste nel conteggiare il numero di parole positive e negative per assegnare alla frase il sentimento più presente. Si ha quindi per ogni bigramma il suo corrispondete sentimento, che può essere positivo, negativo oppure neutro, successivamente andremo a calcolare il numero di bigrammi per ogni frase in modo da tener conto di questo nel calcolare il valore di sentimento finale per ciascun id corrispondente ad ogni comment. 
+
+```
+Con la funzione _words.computeSentiment_ abbiamo definito come assegnare a ciascuna parola il valore rappresentativo per il sentimento. In questa sezione è invece necessario trovare una strategia per rappresentare il sentimento dell'intero commento. 
+```
+
+```{r def-sent-per-comm}
+
+corpus.compute_sentiment_per_comment <- function(tidy_clean_bigrams, data_txt){
+   
+   sentiment_per_doc <- tidy_clean_bigrams  %>% 
+            inner_join(get_sentiments("afinn"), by=c('word1'= 'word')) %>%
+            inner_join(get_sentiments("bing"), by=c('word1'= 'word')) %>%
+            inner_join(get_sentiments("afinn"), by=c('word2'= 'word')) %>%
+            inner_join(get_sentiments("bing"), by=c('word2'= 'word')) %>%
+            mutate( affin = (value.x + value.y) / 2) %>%
+            mutate( bing = case_when(sentiment.x == 'positive' & sentiment.y == 'positive' ~ 'positive', 
+                                     sentiment.x == 'negative' & sentiment.y == 'negative' ~ 'negative',
+                                     TRUE ~ 'neutral')) %>%
+      
+      
+            mutate( affin_nrm = range01(affin)) %>%
+            unite(words, c("word1", "word2"), sep = " ") %>%
+      #  working with this task, each ID is a comment in the corpus, 
+      # the same of the tidy dataset 
+            mutate(id = as.integer(document)) %>%
+            select(id, words, affin, affin_nrm, bing)
+   
+
+   sentiment_per_comment <- sentiment_per_doc %>%
+      inner_join(data_txt, by='id') %>%
+      select(date, author, id, words, affin, affin_nrm, bing)
+   
+   return(sentiment_per_comment)
+}
+
+```
+
+Leggiamo il file della cartella Data per ottenere un oggetto tidy contenente i token del corpus ottenuti dalla sua correzione tramite il valore TRUE assegnato all'argomento _spell\_checking_. 
+
+```{r}
+
+doge_clean_tidy_bigrams <- readRDS("../Data/bigrams_clean.rds")
+
+# sentiment per comment 
+sent_per_comm_dogeBi <- corpus.compute_sentiment_per_comment(doge_clean_tidy_bigrams, doge_df)
+
+remove(doge_clean_tidy_bigrams)
+
+```
+
+Da questa funzione ci viene restituito una tabella contente le variabili descrittive per identificare l'id di ogni comment, i bigrammi per ogni id e l'insieme di valori che identificano il sentimento. 
+
+Proviamo quindi a raggruppare e conteggiare i bigrammi per commento. 
+
+```{r idpercomm}
+Bi_per_id <- sent_per_comm_dogeBi %>% 
+   group_by(id) %>%
+   count()
+
+#max(Bi_per_id$n)
+sent_per_comm_dogeBi = sent_per_comm_dogeBi %>% inner_join(Bi_per_id, by = "id")
+
+remove(Bi_per_id)
+```
+
+Per calcolare la polarità di un sentimento si è utilizzata la seguente formula: 
+
+$$
+   polarity = (pos + neut*0.4) - (neg + neut*0.6)
+$$
+
+Rispetto al calcolo di polarità classico, cioè sottraendo gli elementi negativi da quelli positivi, si è deciso di distribuire il peso degli elementi neutri in entrambi i membri della sottrazione. Successivamente questo valore sarà passato a una funzione che ne permette di normalizzare il dominio tra -1 e 1, la tangete iperbolica. 
+
+```{r}
+
+sigmoid <- function(x) {
+   sig = 1 / (1 + exp(-{{x}}))
+   return(sig)
+}
+
+fatt <- function(x){
+    ifelse(x == 1, 1, x * fatt(x-1))
+}
+
+over_time_sentiment <- sent_per_comm_dogeBi %>%
+         count(bing, id) %>%
+   # aggregate split with count of sentiment
+         spread(bing, n, fill = 0) %>%
+   # for each comment pos, neg, neut count 
+         mutate(polarity = (positive + neutral*0.4) - (negative + neutral*0.6)) %>%
+   # if pol is neg -> neg 
+         mutate(polarity = as.numeric(polarity)) %>%
+   # dimension of comment (bigrams count) 
+         rowwise() %>%
+         mutate(dim = sum(positive, negative, neutral)) %>%
+   # moltiplichiamo la polarità per il fattoriale di dimensione e dividiamo per la dimensione
+   # In questo modo i commenti con maggior numero di bigrammi avrà un peso molto maggiore agli altri
+         mutate(polarity_dim =  as.double(polarity) / fatt(dim) ) %>%
+   # standardizziamo tra [0,1] e [-1, 1]
+         mutate(polarity_sig_dim = sigmoid(polarity_dim)) %>%
+         mutate(polarity_tan_dim = tanh(polarity_dim)) %>%
+         mutate(polarity_sig = sigmoid(polarity)) %>%
+         mutate(polarity_tan = tanh(polarity))
+
+
+
+```
+
+Definiamo la funzione per eseguire il plot del sentimento diviso per anno e mese. 
+
+```{r}
+
+plot_year_sentiment<- function(data, in_year, pol){
+
+     df <- data %>%
+         mutate(year_ = year(date)) %>%
+         filter(year_ == in_year) %>%
+         mutate(month = month(date)) %>%
+         mutate(dayMonth = as.numeric(day(date))) %>%
+         group_by(dayMonth, month) %>%
+        
+         mutate(color_ =  if_else( {{pol}} > 0.5, "green3", 
+                                   if_else( {{pol}} > - 0.5, "blue", "orangered2")) ) %>%
+         mutate(mean_per_day = mean({{pol}}))
+         
+     #df <- aggregate(polarity_tan~., df, FUN=mean)
+        
+      plot <- df %>%
+        ggplot() +
+        geom_col(aes(dayMonth, {{pol}},  color = color_)) +
+        geom_line(aes(dayMonth, mean_per_day), size = 0.1, color = 'black') +
+        #geom_smooth(method = "loess", se = FALSE, aes(color='black')) +
+
+        facet_grid(facets = month ~ ., margins = FALSE)+
+        scale_y_continuous(trans = scales::pseudo_log_trans()) +
+        theme_minimal() + theme(plot.title = element_text(size = 10),
+                                axis.text.x = element_blank(), 
+                                axis.text.y.left = element_blank(),
+                                legend.position = 'none') +
+        xlab(NULL) +
+        ggtitle("Sentiment Polarity Over Time")
+     
+    return(list(plot = plot, df = df ))
+}
+
+```
+
+
+Utilizziamo un grafico ad istogramma per visualizzare le distribuzioni di frequenza delle polarity, così da capire come visualizzare l'informazione. Possiamo anche notare come il numero di parole rimaste per ogni commento è veramente poco, si hanno la gran parte commenti composti da due parole e circa 1/6 con un numero di parole maggiore. 
+
+```{r}
+head(over_time_sentiment, 5)
+
+hist(over_time_sentiment$dim)
+```
+
+```{r}
+# dist of polarity values
+h1 <- ggplot(over_time_sentiment) + 
+   geom_histogram(aes(polarity)) + 
+   theme_minimal()
+
+# normalize with sigmoid
+h2 <- ggplot(over_time_sentiment) + 
+   geom_histogram(aes(polarity_sig)) + 
+      ylab("") + 
+   theme_minimal()
+
+# normalize with tanh
+h3 <- ggplot(over_time_sentiment) + 
+   geom_histogram(aes(polarity_tan)) + 
+      ylab("") + 
+   theme_minimal()
+
+print(h1 + h2 + h3)
+```
+
+
+Utilizzando la formula per tenere conto anche della dimensione del commento, abbiamo delle variazione nel valore numerico della polarità, ma le classi positivo-negativo-neutro identificate dagli intervalli, rispettivamente [0.5, 1], [-0.5, 0.5] e [-1, 0.5] rimangono pressochè invariate. 
+
+
+```{r}
+# dist of polarity values
+h1 <- ggplot(over_time_sentiment) + 
+   geom_histogram(aes(polarity_dim)) + 
+   theme_minimal()
+
+# normalize with sigmoid
+h2 <- ggplot(over_time_sentiment) + 
+   geom_histogram(aes(polarity_sig_dim)) + 
+      ylab("") + 
+   theme_minimal()
+
+# normalize with tanh
+h3 <- ggplot(over_time_sentiment) + 
+   geom_histogram(aes(polarity_tan_dim)) + 
+      ylab("") + 
+   theme_minimal()
+
+print(h1 + h2 + h3)
+remove(h1, h2, h3)
+```
+
+Uniamo il dataset con le misure di polarità con i dati riguardanti la data di creazione del commento, l'id del commento per raggruppare i singoli bigrammi e successivamente andremo anche a recuperare i valori di _score_ assegnati a ciascun commento di ogni utente. In questo modo possiamo andare a visualizzare l'andamento delle polarità in relazione al tempo, e successivamente utilizzeremo questi dati nella costruzione della rete degli utenti. 
+
+```{r}
+# re-join date 
+over_time_sentiment_join <- over_time_sentiment %>% 
+   inner_join(sent_per_comm_dogeBi, by = "id") %>%
+   select(date, id, polarity_tan, author) 
+remove(sent_per_comm_dogeBi)
+
+# date sentiment
+over_time_sentiment <- over_time_sentiment_join %>%
+   select(date, polarity_tan) %>% # polarity , polarity_tan_dim
+   group_by(date) %>%
+   summarise_at(vars(polarity_tan), funs(mean(., na.rm=TRUE)))
+
+# comment sentiment 
+sentiment_id <- over_time_sentiment_join %>%
+   select(id, polarity_tan) %>% # polarity , polarity_tan_dim
+   group_by(id) %>%
+   summarise_at(vars(polarity_tan), funs(mean(., na.rm=TRUE)))
+
+# author sentiment
+# replace na with 0 !! 
+sentiment_author <- over_time_sentiment_join %>%
+   select(author, polarity_tan) %>% # polarity , polarity_tan_dim
+   group_by(author) %>%
+   summarise_at(vars(polarity_tan), funs(mean(.)))
+
+
+```
+
+Siamo andati a calcolare il sentimento medio per ogni giornata, per ogni commento e per ogni utente. Andiamo quindi ad utilizzare la funzione definita sopra per visualizzare i diversi grafici.
+
+```{r}
+p1 <- plot_year_sentiment(over_time_sentiment, "2020", polarity_tan)    # date sentiment mean
+
+# p1$df %>%
+#    filter( polarity_tan > 0)
+
+print(p1$plot)
+```
+
+Questo primo grafico ci fa vedere in media la polarità del sentimento giornaliero. Si va poi a visualizzare il numero di commenti delle tre diverse polarità per ogni giornata e mese. 
+
+```{r}
+p2 <- plot_year_sentiment(over_time_sentiment_join, "2020", polarity_tan)  
+print(p2)
+```
+```{r}
+print(p1$plot + p2$plot)
+remove(p1, p2)
+```
+
+Si può notare come nel periodo in cui ci sono stati sia tanti commenti positivi che tanti commenti negativi, il valore medio della polarità risulta il più "neutrale" rispetto gli altri mesi. L'aggregarsi di tanto sentimento nel mese di Luglio può corrispondere anche ad una semplice maggior attività degli utenti e quindi un maggior numero di commenti come visto nel primo grafico della sezione. 
+
+Andiamo a confrontare il sentimento dei commenti del 2021 con l'andamento del prezzo del Dogecoin. Anche qui il numero di commenti, il sentimento espresso in essi e il valore di dogecoin sul mercato sembrano essere correlati. 
+
+```{r}
+dogeusd <- read.csv("../Data/DOGE-USD.csv")
+
+s <- plot_year_sentiment(over_time_sentiment_join, "2021", polarity_tan)
+
+p <- dogeusd %>%
+   mutate(Date = as.Date(Date)) %>%
+   filter( year(Date) == "2021") %>%
+   mutate(month = month(Date)) %>%
+   mutate(Low = as.double(Low)) %>%
+   mutate(High = as.double(High)) %>%
+   mutate(dayMonth = as.numeric(day(Date))) %>%
+      # plot..
+      ggplot(aes(x=dayMonth, y=Low)) +
+         geom_line( color = 'red', size = 0.3 ) +
+         geom_line(aes(y = High), color = 'green4', size = 0.3) +
+         facet_grid(facets = month ~ ., margins = FALSE)+
+         xlab("Date") + 
+         ylab("Polarity") + 
+         ggtitle("2021 - price of DOGE") +
+         theme( plot.title = element_text(size = 9) , 
+                axis.text.y = element_blank()) +
+         theme_minimal()
+
+print(s$plot + p)
+remove(s, p)
+```
+
+
+#### An advanced tools for sentiment analysis on social media 
+
+Riscontrando molte problematiche dovute ai testi del social media e al limitato vocabolario per la sentiment analysis si è deciso di approfondire le tecniche utilizzate in letteratura. Si è trovato questo articolo del 2020 riguardante un analisi fatta su Twitter riguardo il tema Bitcoin, in cui viene utilizzata una nuova tecnica chiamata VADER [@vaderBit].  
+
+Si è quindi provato ad utilizzarla su un sottoinsieme del dataset, per testarne il funzionamento. Il processamento del testo richiede molto tempo, è stato quindi impossibile effettuare un confronto nella classificazione dei sentimenti. 
+
+###### VADER-Sentiment-Analysis 
+
+VADER ( Valence Aware Dictionary for Sentiment Reasoning) [@vader] è un modello usato per l'analisi del sentimento sia per la polarità che per l'intensità delle emozioni. Principalmente è stato reso disponibile per il pacchetto NLTK del linguaggio Python ed è applicabile direttamente al corpus di testo grezzo e non etichettato. 
+
+L'analisi viene fatta mappando ciascuna parola al 'sentiment score' che identifica l'intensità dell'emozione. Il punteggio del sentimento di un intero testo può esser ottenuto sommando l'intensità di ciascuna parola. Oltre a riconoscere bigrammi che contengono negazioni, è anche capace di distinguere le parole scritte in maiuscolo e che quindi dovrebbero avere una maggior intensità nel sentimento. 
+
+```{r vader}
+data <- readRDS("../Data/dogecoin.rds")
+doge_df <- data$df_comm
+remove(data)
+
+
+library(vader)
+
+colnames(doge_df)
+
+df_for_vader <- doge_df %>%
+   mutate(year = year(date)) %>%
+   mutate(month = month(date)) %>%
+   filter(year == "2021") %>%
+   head(2)
+
+vader_analysis <- df_for_vader %>%
+   mutate(scores = list(get_vader(df_for_vader$body))) %>%
+   #unnest(scores) %>%
+   select(id, date, author, scores)
+
+vader_analysis
+vader_analysis$scores
+
+remove(doge_df, df_for_vader, vader_analysis)
+```
+
+Dai risultati di due commenti possiamo vedere come venga associato un punteggio per ogni sentimento (positivo, negativo e neutro) per ciascuna frase, oltre ad avere i punteggi per ogni parola presente nel testo sotto forma di lista. 
+
+
+## Classify users with Sentiment and Score
+
+Recuperiamo i dati riguardanti gli score per ogni commento e andiamo poi a calcolarne la media per ciascun utente. Non si è andati a legare ciascun commento al suo score a causa dell'enorme quantità di commenti che avrebbero reso difficile la visualizzazione. 
+
+Per lo stesso problema di memoria non abbiamo inserito questo dato all'interno del dataset iniziale. 
+
+```{r}
+
+path='doge_com_raw_data'
+if(!(exists(path))){
+   data <- read.csv("../Data/src/dogecoin_com.csv")
+}
+
+# THE ID IS ALWAYS RELATIVE TO THIS DATASET
+
+data_score <- data %>%
+   mutate(date = as.Date(as_datetime(created_utc))) %>%
+   filter(author != '[deleted]' & author != 'AutoModerator') %>% 
+   mutate(id = row_number()) %>%
+   # date, parent_id, link_id with the author identify a comments
+   distinct( author, date, body, parent_id, link_id, .keep_all= TRUE) %>%
+   select(id, score, author)
+
+remove(data)
+```
+
+Essondo presenti molti utenti con score pari a 1 si è deciso di normalizzare i valori nell'intervallo [0-1], in modo da avere una miglior distribuzione e poter legare la feature _score_ ad una caratteristica del grafico (per esempio dimensione o colore del nodo). 
+
+```{r}
+## MEAN SCORE FOR EACH USER 
+
+mean_score_usr <- aggregate(score ~ author, data_score, FUN = mean ) %>%
+   mutate( score_nrm = range01(score) ) %>%
+   as.data.frame()
+head( mean_score_usr %>% arrange(-score), 5)
+
+write_rds(mean_score_usr, "../Data/usr_score.rds")
+
+```
+
+Per facilitare la visualizzazione andiamo ad aggiungere una variabile fattore al dataframe contenente autore e sentimento a lui associato. Aggiungendo questa variabile ci permette di classificare in tre gruppi gli utenti: quelli che in generale si esprimono con un sentimento positivo, chi si esprime in maniera neautra e invece chi prende una posizione in genere negativa. Prima di fare ciò si fa a sostituire tutti i valori non definiti per i sentimenti con il valore 0. 
+
+```{r}
+head(sentiment_author, 3)
+
+sentiment_author <- sentiment_author %>%
+   mutate(polarity_tan = if_else(is.na(polarity_tan), 0, polarity_tan))
+
+write_rds(sentiment_author, "../Data/sent_usr.rds")
+   
+remove(data_score)
+```
+
+Visualizziamo la distribuzione degli score e dei sentimenti relativi agli utenti. 
+
+```{r}
+
+# dist of polarity values
+h1 <- ggplot(mean_score_usr) + 
+   geom_histogram(aes(score)) + 
+   theme_minimal()
+
+# normalize with sigmoid
+h2 <- ggplot(mean_score_usr) + 
+   geom_histogram(aes(score_nrm)) + 
+      ylab("") + xlab("log(score_nrm)") +
+   scale_y_log10() + 
+   theme_minimal()
+
+
+print(h1 + h2)
+remove(h1, h2)
+
+# write.csv(mean_score_usr, "../Data/usr_sent_score.csv")
+remove(time_sent_aut_score)
+```
+
+
+#### Build User Network
+
+Per costruire le relazioni tra gli utenti si è utilizzato il dato _link\_id_, che permette di indentificare la gerarchia dei commenti all'interno di ogni post pubblicato.
+
+Definiamo quindi la funzione che ci permette di scegliere gli utenti con il maggior numero di commenti effettuati e con questi andare poi a costruire la relazione _'gli utenti hanno avuto un'interazione con'_ facendo un join sulla variabile _link\_id_. L'interazione in questo caso consiste nell'aver commentato uno stesso post o lo stesso commento all'interno di un post. 
+
+```{r user-top-extract}
+# data must have cols : (created_utc, author, link_id )
+# dataf : source dataset
+# file_name: name for save network tidy data 
+# num_usr: number of top user to extract (bound to 50 usr for computability)
+compute_top_usr_net <- function(dataf, file_name, num_usr){
+   
+   if(num_usr>100){errorCondition("Too much user for compute graph visualization")}
+   
+   author_link_unique <- dataf %>%
+      select(author, link_id) %>%
+      filter(author != '[deleted]' & author != 'AutoModerator') %>%
+      group_by(link_id) %>%
+      unique()
+   
+   
+   # number of post which each author interact with 
+   top_usr <- author_link_unique %>% 
+      group_by(author) %>% 
+      summarise( n_aut = n()) %>% 
+      ungroup() %>% 
+      arrange(-n_aut) %>%
+      head(num_usr)
+   
+   # take usr with most comment
+   top_usr_info <- dataf %>%
+      select(author, id, link_id) %>%
+      filter( author %in% top_usr$author)
+
+   # join for track interaction between most "top" usr 
+   net_top_usr <- top_usr_info %>%
+      inner_join(top_usr_info, by='link_id') %>%
+      filter(author.x != author.y) %>%
+      select(author.x, author.y, link_id, id.x, id.y)
+   
+   # write it on file 
+   write.csv(net_top_usr, file=file_name)
+   
+   nodes <- top_usr_info %>%
+      distinct(author)
+   
+   return(list(nodes=nodes, edges=net_top_usr))
+}
+
+
+```
+
+Prendendo il dataframe di partenza si va quindi a estrarre i nodi e gli archi della rete. 
+
+```{r}
+data <- readRDS("../Data/dogecoin.rds")
+doge_df <- data$df_comm
+remove(data)
+
+# save only edges
+net10usr <- compute_top_usr_net(doge_df, "../Data/top_usr_10.rds", 10)
+remove(doge_df, dogeusd)
+
+```
+
+Per motivi di grandezza computazionale, si è scelto di prendere in esame gli utenti con il maggior numero di commenti scritti nel subreddit. Dobbiamo però aggiungere le informazioni relative al sentimento per ciascun link_id e lo score per ciascun utente. 
+
+
+Si può notare come i risultati della funzione definita sopra siano: 
+* la lista di nodi presi
+* un dataframe contente i nodi da legare, il link_id del commento e gli identificativi di ciascun commento.
+
+Gli identificativi riguardo uno specifico utente vengono ripetuti in diversi righe, questo per il fatto che in una discussione gli utenti scrivano più di un solo commento e quindi la relazione di interazione tra più utenti avviene anche più volte in uno stesso commento. 
+
+
+```{r}
+nodes <- net10usr$nodes
+edges <- net10usr$edges
+
+head(edges, 5)
+
+```
+
+Per questo motivo si ha un enorme differenza tra il numero di nodi (10) e il numero di archi presenti (79,756), anche per il fatto che abbiamo selezionato gli utenti con il maggior numero di commento. Per poter visualizzare la rete dovremmo andare a semplificare questa relazione in modo da ridurre il numero di archi presenti. 
+
+Prima di fare ciò, si va ad aggiungere al dataframe dei nodi le informazioni riguardo il punteggio medio dei commenti e il sentimento medio di ciascun utente.
+
+```{r}
+mean_score_usr <- readRDS("../Data/usr_score.rds")
+sentiment_author <- readRDS("../Data/sent_usr.rds")
+
+# join mean score and sentiment with user
+nodes_ <- nodes %>%
+   inner_join(mean_score_usr, by="author") 
+  
+nodes_ <- nodes_ %>%
+   left_join(sentiment_author, by = "author") %>%
+   #replace NA sentiment with zero (neutral sentiment)
+   mutate(polarity_tan = if_else(is.na(polarity_tan), 0, polarity_tan)) %>%
+   select(author, polarity_tan, score, score_nrm)
+
+```
+
+```{r include = FALSE}
+remove(net10usr, over_time_sentiment, over_time_sentiment_join, 
+       sentiment_author, sentiment_id, mean_score_usr)
+```
+
+Un'analisi più interessante si potrebbe fare andando a tenere conto del sentimento di ciascun commento, invece del sentimento medio dell'utente. Similmente si può fare lo stesso ragionamento per gli _score_. Ciò non è stato possibile a causa dell'elevato numero di archi e la ridotta memoria disponibile. 
+
+Attraverso la funzione _tbl\_graph_ messa a disposizione dalla libreria _tidygraph_ andiamo a costruire gli elementi del grafo. 
+
+```{r net_doge}
+
+edges_ <- edges %>% rename(
+   from = author.x,
+   to = author.y,
+   post_id = link_id,
+)
+
+edge_numCommUsr <- edges_ %>%
+   group_by(from, to, post_id) %>%
+   count() %>%
+   ungroup()
+
+edges_ %>%
+   inner_join(edge_numCommUsr, by = c("from", "to", "post_id"))
+
+graph <- tbl_graph(nodes = nodes_, edges = edges_)
+write_rds(graph, "../Data/graph.rds")
+
+
+```
+
+La computazione per visualizzare il grafo richiede molte risorse di memoria, anche per il fatto che le interazioni tra i nostri primi 10 utenti sono molte. Si va quindi a creare un grafo non diretto in cui vengano collassate tutte le interazioni tra due utenti di uno stesso link_id in un unico arco, si utilizza la funzione _as.undirected_ messa a disposizione dalla libreria _igraph_.
+
+```{r}
+library("igraph")
+graph <- readRDS("../Data/graph.rds")
+graph_undir <- graph %>%
+   # edge.attr.comb per mantenere l'informazione del primo elemento
+   # tra quelli che hanno subito il raggruppamento  
+   as.undirected(mode = 'collapse', edge.attr.comb = "first") %>%
+   as_tbl_graph()
+
+remove(graph)
+print(graph_undir)
+```
+
+Abbiamo così perso l'informazione riguardante il numero di interazioni tra ciascun utente.
+
+
+```{r}
+graph_undir %>% 
+   activate(nodes) %>%
+   # compute centrality 
+   mutate(eigenv = centrality_eigen()) %>%
+   ggraph(layout='kk') +
+      geom_edge_link(aes(colour = post_id ),  show.legend = FALSE ) + 
+      geom_node_point(aes(size = score_nrm,  color = polarity_tan) ) + 
+      geom_node_text(aes(label = paste0(author),  repel = TRUE))
+
+
+```
+
+Se andiamo a visualizzare le misure di centralità utilizzate si può vedere come siano costanti per ogni nodo, questo perchè si sono considerati pochi nodi ed essendo il grafo risultante è completo. Se andavamo a considerare ogni singolo commento, il numero di archi entranti/uscenti dei nodi sarebbero in numero diversi. 
+   
+Si è andati ad utilizzare due misure di centralità sui nodi: 
+* centralità con il metodo degli autovettori, dal momento che si è utilizzato un grafo indiretto, per misurare l'importanza degli utenti
+* betweenness centrality, per misurare l'influenza dei nodi 
+
+
+```{r}
+
+graph_undir %>% 
+   activate(nodes) %>%
+   # compute influence
+   mutate(eigenv = centrality_eigen()) %>%
+   mutate(betweenness = centrality_betweenness()) %>%
+   ggraph(layout='kk') +
+   geom_edge_link(aes( colour = post_id), size=0.1, show.legend = FALSE) +
+   geom_node_point(aes(size = betweenness, alpha = eigenv) )+ 
+   geom_node_text(aes(label = author),  repel = TRUE)
+
+```
+
+In questo caso la betweeness potrebbe essere intesa come l'influeza che un nodo ha avendo interagito con diversi commenti, e quindi molto attivo nella comunità, ed è anche per questo motivo che si trova su più shortest path.
+
+```{r include=FALSE}
+remove(graph, graph_undir)
+```
+
+
+##### 50 top users Network
+
+Andiamo adesso a ripetere il procedimento con un numero maggiore di nodi, in modo da vedere se le misure di centralità possano esser utili in un dominio di utenti maggiore.
+
+```{r}
+
+data <- readRDS("../Data/dogecoin.rds")
+doge_df <- data$df_comm
+remove(data)
+
+net50usr <- compute_top_usr_net(doge_df, "../Data/top_usr_50.rds", 50)
+mean_score_usr <- readRDS("../Data/usr_score.rds")
+sentiment_author <- readRDS("../Data/sent_usr.rds")
+remove(doge_df)
+
+# head(net50usr, 3)
+
+nodes <- net50usr$nodes
+edges <- net50usr$edges
+
+# join mean score and sentiment with user
+nodes_ <- nodes %>%
+   inner_join(mean_score_usr, by="author") 
+  
+nodes_ <- nodes_ %>%
+   left_join(sentiment_author, by = "author") %>%
+   mutate(polarity_tan = if_else(is.na(polarity_tan), 0, polarity_tan)) %>%
+   select(author, polarity_tan, score, score_nrm)
+
+```
+
+```{r}
+hist(nodes_$score) 
+
+nodes_ %>%
+   filter(score< 0 )
+```
+Per visualizzare meglio il sentimneto degli utenti si va a rimuovere la variabile che indica lo score medio dell'utente, questo perchè non si ha questa grande differenza tra gli score dei primi 50 utenti. Avendo controllato di non avere pesi negativi e non avendo molta differenza tra gli score di questi utenti, possiamo andare ad utilizzare lo score non normalizzato come variabile nel grafo. 
+
+
+```{r include = FALSE}
+remove(doge_df, net50usr, over_time_sentiment, over_time_sentiment_join, 
+       sentiment_author, sentiment_id, mean_score_usr)
+```
+
+Si va nuovamente a prepare i dati per la costruzione del grafo. 
+
+```{r}
+
+edges_ <- edges %>% rename(
+   from = author.x,
+   to = author.y,
+   post_id = link_id,
+)
+
+nodes_ <- nodes_ %>% rename(
+   sentiment.polarity = polarity_tan, 
+   mean.score = score, 
+   mean.score.nrm = score_nrm
+)
+
+graph <- tbl_graph(nodes = nodes_, edges = edges_)
+write_rds(graph, "../Data/graph_50.rds")
+
+remove(nodes, nodes_, edges, edges_)
+```
+
+Per comodità di testing si è salvato il grafo corrispondente nella cartella Data, in modo da recuperarlo senza dover ripetere la computazione intera. 
+
+```{r}
+library("igraph")
+graph <- readRDS("../Data/graph_50.rds")
+
+graph_undir <- graph %>%
+   as.undirected(mode = 'collapse', edge.attr.comb = "first") %>%
+   as_tbl_graph()
+
+print(graph_undir)
+```
+
+
+```{r}
+graph_undir %>% 
+   activate(nodes) %>%
+   # compute centrality 
+   mutate(eigenv = centrality_eigen()) %>%
+   ggraph(layout='kk') +
+      geom_edge_link(aes(colour = post_id, alpha = 0.4),  show.legend = FALSE) + 
+      geom_node_point(aes(size = eigenv, alpha = mean.score, color = sentiment.polarity), ) + 
+      geom_node_text(aes(label = author), repel = TRUE)
+
+
+```
+
+Per visualizzere meglio la rappresentazione della centralità e del sentimento si va a rimuovere la variabile _mean.score_ che non presenta tutta questa differenza all'interno dei nodi e i valori non normalizzati risultano tutti positivi.
+
+```{r}
+
+graph_undir %>% 
+   activate(nodes) %>%
+   # compute influence
+   mutate(betweenness = centrality_betweenness()) %>%
+   ggraph(layout='kk') +
+   geom_edge_link(aes( colour = post_id), size=0.1, alpha = 0.3, show.legend = FALSE) +
+   geom_node_point(aes(size = betweenness, color = sentiment.polarity) )+ 
+   geom_node_text(aes(label = author),  repel = TRUE)
+
+```
+
+## Conclusion 
+
+Non essendo una piattaforma social in cui vengono utilizzate relazioni di amicizia e già divisa in comunità per un certo argomento, la studio fatto sulla rete (semplificata) degli utenti con il maggior numero di commenti ci porta ad osservare come gli utenti con una centralità maggiore, in entrambe le misure utilizzate, sono anche quelli che hanno commentato un numero maggiore di post diversi. 
+Si può infatti notare come i nodi centrali interagiscano con più utenti su diversi commenti, al contrario nelle zone periferiche troviamo quegli utenti che scrivono molti commenti ma in pochi post diversi avendo quindi meno interazione con tanti altri utenti. Bisognerebbe però utilizzare come relazione il singolo commento di ciascun utente in modo da associarli uno score e sentimento preciso, avendo così una miglior rappresentazione della rete sociale. 
+
+Riguardo il sentimento medio, si ha un solo utente con polarità molto negativa e che interagisce su molti commenti; mentre gli utenti con centralità maggiore tendono ad avere un sentimento medio neutrale, questo può esser dovuto al fatto che andando a far la media dei sentimenti si ha un annullamento tra commenti positivi e negativi dell'utente stesso. 
+
+Rispondendo alle domande poste all'inizio del progetto, si è notato come possa esistere una relazione tra i sentimenti estratti dal subreddit di dogecoin e l'andamento del prezzo sul mercato. Questo può confermare il fatto che più si parla di un certo argomento, sia positivamente che negativamente, più l'attenzione generale sale. Questa conclusione può esser fatta per il caso specifico di dogecoin, in cui anche l'alta frequenza di bigrammi relativi all'incitamento all'acquisto può avere avuto una certa influenza.
+
+Per confrontare i bigrammi e sentimenti dei diversi subreddit si deve andare ad osservare i risultati ottenuti nell'altro report. In generale la situazione riscontrata nella comunità di dogecoin non si presenta anche negli altri, infatti sono presenti parole o bigrammi che rimandano ad altri argomenti che la sola compravendita della cryptovaluta in questione oppure questi termini non hanno una grande differenza in termini di frequenza rispetto gli altri termini o bigrammi. Inoltre si è visto come la classificazione in sentimenti, pur cambiando nelle percentuali, rimanga più o meno sempre la stessa. 
+
+Per rispondere all'ultima domanda, cioè quando possono esser considarati affidabili gli utenti, non possiamo dirlo con certezza con il solo sentimento con cui si esprimono. Tuttavia, personalmente, sarei portato a 'fidarmi' maggiormente di una persona con sentimento medio positivo e che non sia neanche tra quelle con centralità maggiore; questo perchè reputo che se un utente ha un gran numero di commenti con un sentimento medio neutrale e senza avere uno score più alto rispetto gli altri, probabilmente le informazioni contenute nei suoi testi non sono molte e molto rilevanti, ma magari più di spam o commenti generali. 
+
+Per concludere, si è toccato con il codice la difficoltà di preparare dei dati grezzi e incorretti per l'analisi del testo e quanto può esser utile un correttore delle parole o una tecnica come VADER per il text mining. Purtroppo non si è riusciti a fare un analisi della rete molto esaustiva a causa sia delle risorse computazionali ridotte (il grafo completo occupa circa 60GB di memoria, impedendone l'allocazione) sia essendo reddit un social media con una gestione diversa degli utenti rispetto agli altri. Inoltre la difficoltà nel pulire il testo da errori ortografici e da onomatopee ha dei risvolti anche nell'analisi del testo. 
+
+Tuttavia, l'obiettivo principale era quello di partire da dei dati grezzi e raccolti autonomamente per arrivare ad estrapolare informazioni interessanti sia per quanto riguarda il text mining sia per una possibile costruzione della rete sociale. 
+
+
+## References
+
+

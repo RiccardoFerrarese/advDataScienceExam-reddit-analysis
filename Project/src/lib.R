@@ -2,42 +2,38 @@
 
 ## general lib for manipulate data
 
-library(lubridate) 
-library(dplyr)
-library(tidyr)
-library(tidyverse)
-library(sets)
+library("lubridate")
+library("dplyr")
+library("tidyr")
+library("tidyverse")
+library("sets")
 
-library(tidytable) 
+library("tidytable")
 
-## lib for side by side plot 
-
-library(patchwork)
+# lib for side by side plot 
+library("patchwork")
 
 # lib for network analysis
 
-library(ggraph)
-library(tidygraph)
+library("igraph")
+library("ggraph")
+library("tidygraph")
 
 
 # lib for text mining
 
-library(tidytext)
-library(quanteda)
-library(quanteda.textplots)
-library(quanteda.textstats)
-library(stringdist)
+library("tidytext")
+library("quanteda")
+library("quanteda.textplots")
+library("quanteda.textstats")
+library("stringdist")
 
 
-library(textdata)        # lib for sentiment dataset
+library("textdata")        # lib for sentiment dataset
+library("textstem")        # lib for lemmatize words
 
-library(textstem)        # lib for lemmatize words
+library("topicmodels")     # for topic modelling with LDA 
 
-
-
-library(hunspell)
-library(SnowballC)       # lib for stemming words and more..
-
-
-library(microbenchmark)
+library("hunspell")
+library("SnowballC")       # lib for stemming words and more..
 
