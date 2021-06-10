@@ -3,6 +3,8 @@ Project/Rhistory
 Project/RData
 Project/Ruserdata
 
+.idea/
+.vscode/
 
 .data/
 
@@ -15,6 +17,7 @@ Project/Data/
 
 
 Project/.RDataTmp
+Project/.Rprofile
 
 
 PythonScript/data_apr

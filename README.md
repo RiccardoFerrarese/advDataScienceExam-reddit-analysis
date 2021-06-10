@@ -20,15 +20,9 @@ Content of directory:
 - PythonScript: dir with the script for scrapping Reddit's data 
 
 
+###### Python env
 
-
-###### Without conda
-
-Use pip for install the  env's packages (with python virtual env activated):
-
-```{shell
-pip install environment.yml
-```
+View README.md in _PythonScript_ dir.
 
 
 ###### R env 
