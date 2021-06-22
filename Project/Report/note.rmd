@@ -2010,7 +2010,7 @@ set.seed(190)
 dff <- doge_tidy$dfm
 # colour of words from least to most frequent
 textplot_wordcloud(dff, min_count = 10000,
-     color = c('pink', 'red', 'green3', 'purple', 'orange', 'blue3'))
+     color = c('grey', 'red', 'green3', 'purple', 'orange', 'blue3'))
 remove(dff)
 ```
 
@@ -2502,6 +2502,7 @@ hist(over_time_sentiment$dim)
 ```
 
 ```{r}
+
 # dist of polarity values
 h1 <- ggplot(over_time_sentiment) + 
    geom_histogram(aes(polarity)) + 
@@ -2596,6 +2597,7 @@ Questo primo grafico ci fa vedere in media la polarità del sentimento giornalie
 p2 <- plot_year_sentiment(over_time_sentiment_join, "2020", polarity_tan)  
 print(p2)
 ```
+
 ```{r}
 print(p1$plot + p2$plot)
 remove(p1, p2)
@@ -2741,7 +2743,7 @@ h1 <- ggplot(mean_score_usr) +
 # normalize with sigmoid
 h2 <- ggplot(mean_score_usr) + 
    geom_histogram(aes(score_nrm)) + 
-      ylab("") + xlab("log(score_nrm)") +
+      ylab("log(count)") + xlab("score_nrm") +
    scale_y_log10() + 
    theme_minimal()
 
@@ -2985,6 +2987,7 @@ hist(nodes_$score)
 nodes_ %>%
    filter(score< 0 )
 ```
+
 Per visualizzare meglio il sentimneto degli utenti si va a rimuovere la variabile che indica lo score medio dell'utente, questo perchè non si ha questa grande differenza tra gli score dei primi 50 utenti. Avendo controllato di non avere pesi negativi e non avendo molta differenza tra gli score di questi utenti, possiamo andare ad utilizzare lo score non normalizzato come variabile nel grafo. 
 
 

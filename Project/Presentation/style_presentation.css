@@ -1,0 +1,11 @@
+
+/* Extra CSS */
+.scrol-slide {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+}
+
+.fullslide img {
+  margin-top: 10px;
+  margin-left: 10px;
+}
